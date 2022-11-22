@@ -17,7 +17,7 @@ import (
 	"game-server/internal/discordbot/discordlambda"
 )
 
-func Test_Handle(t *testing.T) {
+func Test_Handle_Ping(t *testing.T) {
 	pubKey, privateKey, err := crypto.GenerateKey(nil)
 	require.NoError(t, err)
 
@@ -28,6 +28,10 @@ func Test_Handle(t *testing.T) {
 	pingReq, err := json.Marshal(discordbot.Request{Type: discordbot.RequestTypePing})
 	require.NoError(t, err)
 	pingReqString := string(pingReq)
+
+	// Set required env variables
+	os.Setenv(discordlambda.EnvInstanceId, "instance-id")
+	defer os.Unsetenv(discordlambda.EnvInstanceId)
 
 	tests := []struct {
 		name          string
@@ -47,13 +51,13 @@ func Test_Handle(t *testing.T) {
 		{
 			name:          "Sad path - Missing public key",
 			eventBody:     pingReqString,
-			expStatusCode: http.StatusUnauthorized,
+			expStatusCode: http.StatusInternalServerError,
 			pubKeyEnv:     "",
 		},
 		{
 			name:          "Sad path - Non-hexidecimal public key",
 			eventBody:     pingReqString,
-			expStatusCode: http.StatusUnauthorized,
+			expStatusCode: http.StatusInternalServerError,
 			pubKeyEnv:     badHex,
 		},
 		{
@@ -88,8 +92,8 @@ func Test_Handle(t *testing.T) {
 
 			// Set public key env
 			if tt.pubKeyEnv != "" {
-				os.Setenv(discordlambda.PublicKeyEnv, tt.pubKeyEnv)
-				defer os.Unsetenv(discordlambda.PublicKeyEnv)
+				os.Setenv(discordlambda.EnvPublicKey, tt.pubKeyEnv)
+				defer os.Unsetenv(discordlambda.EnvPublicKey)
 			}
 
 			// Setup event
