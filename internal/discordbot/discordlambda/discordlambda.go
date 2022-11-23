@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -61,6 +62,8 @@ func (e MissingEnvErr) Error() string {
 }
 
 type Handler struct {
+	logger *log.Logger
+
 	// Env variables
 	publicKey  crypto.PublicKey
 	instanceId string
@@ -71,13 +74,14 @@ type Handler struct {
 
 func New() *Handler {
 	return &Handler{
+		logger:         log.Default(),
 		instanceClient: instance.New(),
 	}
 }
 
 func (h *Handler) Handle(event events.APIGatewayV2HTTPRequest) events.APIGatewayV2HTTPResponse {
 	if err := h.loadEnv(); err != nil {
-		fmt.Fprint(os.Stderr, err)
+		h.logger.Print(err)
 		return internalErrorResponse
 	}
 
@@ -107,13 +111,13 @@ func (h *Handler) Handle(event events.APIGatewayV2HTTPRequest) events.APIGateway
 
 	// Connect to AWS instance
 	if err := h.instanceClient.Connect(); err != nil {
-		fmt.Fprint(os.Stderr, err)
+		h.logger.Print(err)
 		return internalErrorResponse
 	}
 
 	// Start instance if not currently running
 	if state, err := h.instanceClient.GetInstanceState(h.instanceId); err != nil {
-		fmt.Fprint(os.Stderr, err)
+		h.logger.Print(err)
 		return internalErrorResponse
 
 	} else if state == instance.InstancePendingState {
@@ -124,7 +128,7 @@ func (h *Handler) Handle(event events.APIGatewayV2HTTPRequest) events.APIGateway
 	} else if state != instance.InstanceRunningState {
 		// Attempt to start
 		if err := h.instanceClient.StartInstance(h.instanceId); err != nil {
-			fmt.Fprint(os.Stderr, err)
+			h.logger.Print(err)
 			return internalErrorResponse
 		}
 

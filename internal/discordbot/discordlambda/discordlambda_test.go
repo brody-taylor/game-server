@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"os"
 	"testing"
@@ -35,7 +36,7 @@ func Test_Handle_Ping(t *testing.T) {
 	os.Setenv(EnvInstanceId, "instance-id")
 	defer os.Unsetenv(EnvInstanceId)
 
-	h := Handler{}
+	h := Handler{logger: log.Default()}
 
 	tests := []struct {
 		name          string
@@ -178,6 +179,7 @@ func Test_Handle_Instance(t *testing.T) {
 			mockInstanceClient.On(instance.GetInstanceStateMethod, instanceId).Return(tt.getState, tt.getStateErr)
 			mockInstanceClient.On(instance.StartInstanceMethod, instanceId).Return(tt.startErr)
 			h := Handler{
+				logger:         log.Default(),
 				instanceClient: mockInstanceClient,
 			}
 
