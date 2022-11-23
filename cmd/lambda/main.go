@@ -12,5 +12,6 @@ func main() {
 }
 
 func HandleRequest(event events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
-	return discordlambda.Handle(event), nil
+	h := discordlambda.New()
+	return h.Handle(event), nil
 }

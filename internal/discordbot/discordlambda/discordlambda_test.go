@@ -1,9 +1,10 @@
-package discordlambda_test
+package discordlambda
 
 import (
 	crypto "crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"testing"
@@ -14,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"game-server/internal/discordbot"
-	"game-server/internal/discordbot/discordlambda"
+	"game-server/pkg/aws/instance"
 )
 
 func Test_Handle_Ping(t *testing.T) {
@@ -24,14 +25,17 @@ func Test_Handle_Ping(t *testing.T) {
 	pubKeyString := hex.EncodeToString(pubKey)
 	goodHex := hex.EncodeToString([]byte("randomstring"))
 	badHex := "!@#$%^&*()"
+	timestamp := time.Now().String()
 
 	pingReq, err := json.Marshal(discordbot.Request{Type: discordbot.RequestTypePing})
 	require.NoError(t, err)
 	pingReqString := string(pingReq)
 
 	// Set required env variables
-	os.Setenv(discordlambda.EnvInstanceId, "instance-id")
-	defer os.Unsetenv(discordlambda.EnvInstanceId)
+	os.Setenv(EnvInstanceId, "instance-id")
+	defer os.Unsetenv(EnvInstanceId)
+
+	h := Handler{}
 
 	tests := []struct {
 		name          string
@@ -84,7 +88,6 @@ func Test_Handle_Ping(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Generate request signature
-			timestamp := time.Now().String()
 			signature := hex.EncodeToString(crypto.Sign(privateKey, []byte(timestamp+tt.eventBody)))
 			if tt.badSignature != "" {
 				signature = tt.badSignature
@@ -92,21 +95,21 @@ func Test_Handle_Ping(t *testing.T) {
 
 			// Set public key env
 			if tt.pubKeyEnv != "" {
-				os.Setenv(discordlambda.EnvPublicKey, tt.pubKeyEnv)
-				defer os.Unsetenv(discordlambda.EnvPublicKey)
+				os.Setenv(EnvPublicKey, tt.pubKeyEnv)
+				defer os.Unsetenv(EnvPublicKey)
 			}
 
 			// Setup event
 			eventHeaders := map[string]string{
-				discordlambda.SignatureHeader: signature,
-				discordlambda.TimestampHeader: timestamp,
+				SignatureHeader: signature,
+				TimestampHeader: timestamp,
 			}
 			event := events.APIGatewayV2HTTPRequest{
 				Headers: eventHeaders,
 				Body:    tt.eventBody,
 			}
 
-			rsp := discordlambda.Handle(event)
+			rsp := h.Handle(event)
 
 			require.Equal(t, tt.expStatusCode, rsp.StatusCode)
 			if tt.expStatusCode == http.StatusOK {
@@ -114,6 +117,73 @@ func Test_Handle_Ping(t *testing.T) {
 				require.NoError(t, json.Unmarshal([]byte(rsp.Body), &gotBody))
 				assert.Equal(t, tt.expBody, gotBody)
 			}
+		})
+	}
+}
+
+func Test_Handle_Instance(t *testing.T) {
+	// Build event
+	pubKey, privateKey, err := crypto.GenerateKey(nil)
+	require.NoError(t, err)
+	eventBody, err := json.Marshal(discordbot.Request{Type: 2})
+	require.NoError(t, err)
+	timestamp := time.Now().String()
+	signature := hex.EncodeToString(crypto.Sign(privateKey, append([]byte(timestamp), eventBody...)))
+	headers := map[string]string{
+		SignatureHeader: signature,
+		TimestampHeader: timestamp,
+	}
+	event := events.APIGatewayV2HTTPRequest{
+		Headers: headers,
+		Body:    string(eventBody),
+	}
+
+	// Set required env variables
+	instanceId := "instance-id"
+	os.Setenv(EnvInstanceId, instanceId)
+	defer os.Unsetenv(EnvInstanceId)
+	os.Setenv(EnvPublicKey, hex.EncodeToString(pubKey))
+
+	mockErr := errors.New("mock error")
+	tests := []struct {
+		name          string
+		expStatusCode int
+		connectErr    error
+		getState      string
+		getStateErr   error
+		startErr      error
+	}{
+		{
+			name:          "Sad Path - AWS Connection Error",
+			expStatusCode: http.StatusInternalServerError,
+			connectErr:    mockErr,
+		},
+		{
+			name:          "Sad Path - Get State Error",
+			expStatusCode: http.StatusInternalServerError,
+			getStateErr:   mockErr,
+		},
+		{
+			name:          "Sad Path - Start Error",
+			expStatusCode: http.StatusInternalServerError,
+			getState:      instance.InstanceStoppedState,
+			startErr:      mockErr,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup mock instance client
+			mockInstanceClient := new(instance.MockClient)
+			mockInstanceClient.On(instance.ConnectMethod).Return(tt.connectErr)
+			mockInstanceClient.On(instance.GetInstanceStateMethod, instanceId).Return(tt.getState, tt.getStateErr)
+			mockInstanceClient.On(instance.StartInstanceMethod, instanceId).Return(tt.startErr)
+			h := Handler{
+				instanceClient: mockInstanceClient,
+			}
+
+			rsp := h.Handle(event)
+
+			require.Equal(t, tt.expStatusCode, rsp.StatusCode)
 		})
 	}
 }

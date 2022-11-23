@@ -27,25 +27,23 @@ var _ ClientIFace = (*Client)(nil)
 
 type ClientIFace interface {
 	Connect() error
-	GetInstanceState() (string, error)
-	StartInstance() error
+	GetInstanceState(id string) (state string, err error)
+	StartInstance(id string) error
 }
 
 type Client struct {
-	id             *string
 	cfg            *aws.Config
 	instanceClient ec2iface.EC2API
 	session        *session.Session
 }
 
-func New(id string) *Client {
+func New() *Client {
 	cred := credentials.NewEnvCredentials()
 	cfg := aws.NewConfig()
 	cfg.WithRegion(os.Getenv(EnvRegion))
 	cfg.WithCredentials(cred)
 
 	return &Client{
-		id:  aws.String(id),
 		cfg: cfg,
 	}
 }
@@ -61,11 +59,11 @@ func (c *Client) Connect() error {
 	return nil
 }
 
-func (c *Client) GetInstanceState() (string, error) {
+func (c *Client) GetInstanceState(id string) (string, error) {
 	in := &ec2.DescribeInstanceStatusInput{
 		IncludeAllInstances: aws.Bool(true),
 		InstanceIds: []*string{
-			c.id,
+			aws.String(id),
 		},
 	}
 
@@ -80,10 +78,10 @@ func (c *Client) GetInstanceState() (string, error) {
 	return state, nil
 }
 
-func (c *Client) StartInstance() error {
+func (c *Client) StartInstance(id string) error {
 	in := &ec2.StartInstancesInput{
 		InstanceIds: []*string{
-			c.id,
+			aws.String(id),
 		},
 	}
 

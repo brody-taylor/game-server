@@ -60,7 +60,7 @@ func (e MissingEnvErr) Error() string {
 	return "insufficient env variables"
 }
 
-type handler struct {
+type Handler struct {
 	// Env variables
 	publicKey  crypto.PublicKey
 	instanceId string
@@ -69,8 +69,13 @@ type handler struct {
 	instanceClient instance.ClientIFace
 }
 
-func Handle(event events.APIGatewayV2HTTPRequest) events.APIGatewayV2HTTPResponse {
-	h := &handler{}
+func New() *Handler {
+	return &Handler{
+		instanceClient: instance.New(),
+	}
+}
+
+func (h *Handler) Handle(event events.APIGatewayV2HTTPRequest) events.APIGatewayV2HTTPResponse {
 	if err := h.loadEnv(); err != nil {
 		fmt.Fprint(os.Stderr, err)
 		return internalErrorResponse
@@ -101,14 +106,13 @@ func Handle(event events.APIGatewayV2HTTPRequest) events.APIGatewayV2HTTPRespons
 	}
 
 	// Connect to AWS instance
-	h.instanceClient = instance.New(h.instanceId)
 	if err := h.instanceClient.Connect(); err != nil {
 		fmt.Fprint(os.Stderr, err)
 		return internalErrorResponse
 	}
 
 	// Start instance if not currently running
-	if state, err := h.instanceClient.GetInstanceState(); err != nil {
+	if state, err := h.instanceClient.GetInstanceState(h.instanceId); err != nil {
 		fmt.Fprint(os.Stderr, err)
 		return internalErrorResponse
 
@@ -119,7 +123,7 @@ func Handle(event events.APIGatewayV2HTTPRequest) events.APIGatewayV2HTTPRespons
 
 	} else if state != instance.InstanceRunningState {
 		// Attempt to start
-		if err := h.instanceClient.StartInstance(); err != nil {
+		if err := h.instanceClient.StartInstance(h.instanceId); err != nil {
 			fmt.Fprint(os.Stderr, err)
 			return internalErrorResponse
 		}
@@ -132,7 +136,7 @@ func Handle(event events.APIGatewayV2HTTPRequest) events.APIGatewayV2HTTPRespons
 	return internalErrorResponse
 }
 
-func (h *handler) loadEnv() error {
+func (h *Handler) loadEnv() error {
 	// Get expected env variables
 	h.instanceId = os.Getenv(EnvInstanceId)
 	publicKey := os.Getenv(EnvPublicKey)
@@ -153,7 +157,7 @@ func (h *handler) loadEnv() error {
 	return nil
 }
 
-func (h *handler) verify(event events.APIGatewayV2HTTPRequest) bool {
+func (h *Handler) verify(event events.APIGatewayV2HTTPRequest) bool {
 	signature, err := hex.DecodeString(event.Headers[SignatureHeader])
 	if err != nil {
 		return false
