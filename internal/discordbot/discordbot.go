@@ -10,7 +10,7 @@ import (
 
 const (
 	port = "8080"
-	botEndpoint = "/discord"
+	BotEndpoint = "/discord"
 )
 
 type BotServer struct {
@@ -20,7 +20,7 @@ type BotServer struct {
 func New() *BotServer {
 	// Configure server multiplexer
 	mux := http.NewServeMux()
-	mux.HandleFunc(botEndpoint, handler)
+	mux.HandleFunc(BotEndpoint, handler)
 
 	return &BotServer{
 		mux: mux,

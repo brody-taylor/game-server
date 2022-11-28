@@ -153,6 +153,8 @@ func Test_Handle_Instance(t *testing.T) {
 		getState      string
 		getStateErr   error
 		startErr      error
+		getAddress    string
+		getAddressErr error
 	}{
 		{
 			name:          "Sad Path - AWS Connection Error",
@@ -170,6 +172,12 @@ func Test_Handle_Instance(t *testing.T) {
 			getState:      instance.InstanceStoppedState,
 			startErr:      mockErr,
 		},
+		{
+			name:          "Sad Path - Get Instance Address Error",
+			expStatusCode: http.StatusInternalServerError,
+			getState:      instance.InstanceRunningState,
+			getAddressErr: mockErr,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -178,6 +186,7 @@ func Test_Handle_Instance(t *testing.T) {
 			mockInstanceClient.On(instance.ConnectMethod).Return(tt.connectErr)
 			mockInstanceClient.On(instance.GetInstanceStateMethod, instanceId).Return(tt.getState, tt.getStateErr)
 			mockInstanceClient.On(instance.StartInstanceMethod, instanceId).Return(tt.startErr)
+			mockInstanceClient.On(instance.GetInstanceAddressMethod, instanceId).Return(tt.getAddress, tt.getAddressErr)
 			h := Handler{
 				logger:         log.Default(),
 				instanceClient: mockInstanceClient,

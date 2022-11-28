@@ -1,10 +1,12 @@
 package discordlambda
 
 import (
+	"bytes"
 	crypto "crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -136,8 +138,8 @@ func (h *Handler) Handle(event events.APIGatewayV2HTTPRequest) events.APIGateway
 		return internalErrorResponse
 	}
 
-	// TODO: forward request to server
-	return internalErrorResponse
+	// Forward request to server
+	return h.forwardToInstance(eventBody)
 }
 
 func (h *Handler) loadEnv() error {
@@ -170,4 +172,33 @@ func (h *Handler) verify(event events.APIGatewayV2HTTPRequest) bool {
 	msg := []byte(timestamp + event.Body)
 
 	return crypto.Verify(h.publicKey, msg, signature)
+}
+
+func (h *Handler) forwardToInstance(reqBody []byte) events.APIGatewayV2HTTPResponse {
+	// Get endpoint
+	instanceAddress, err := h.instanceClient.GetInstanceAddress(h.instanceId)
+	if err != nil {
+		h.logger.Print(err)
+		return internalErrorResponse
+	}
+	endpoint := fmt.Sprintf("http://%s%s", instanceAddress, discordbot.BotEndpoint)
+
+	// Make HTTP call
+	rsp, err := http.Post(endpoint, "application/json", bytes.NewBuffer(reqBody))
+	if err != nil {
+		h.logger.Print(err)
+		return internalErrorResponse
+	}
+
+	// Convert response body
+	rspBody := new(strings.Builder)
+	if _, err := io.Copy(rspBody, rsp.Body); err != nil {
+		h.logger.Print(err)
+		return internalErrorResponse
+	}
+
+	return events.APIGatewayV2HTTPResponse{
+		StatusCode: rsp.StatusCode,
+		Body:       rspBody.String(),
+	}
 }

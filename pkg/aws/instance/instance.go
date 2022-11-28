@@ -28,6 +28,7 @@ var _ ClientIFace = (*Client)(nil)
 type ClientIFace interface {
 	Connect() error
 	GetInstanceState(id string) (state string, err error)
+	GetInstanceAddress(id string) (address string, err error)
 	StartInstance(id string) error
 }
 
@@ -76,6 +77,23 @@ func (c *Client) GetInstanceState(id string) (string, error) {
 	state := *out.InstanceStatuses[0].InstanceState.Name
 
 	return state, nil
+}
+
+func (c *Client) GetInstanceAddress(id string) (string, error) {
+	in := &ec2.DescribeInstancesInput{
+		InstanceIds: []*string{aws.String(id)},
+	}
+
+	// TODO: also returns instance state, consolidate w/ GetInstanceState into one call
+	out, err := c.instanceClient.DescribeInstances(in)
+	if err != nil {
+		return "", err
+	} else if numInstances := len(out.Reservations[0].Instances); numInstances != 1 {
+		return "", fmt.Errorf("invalid number of instances found: [%v]", numInstances)
+	}
+	ip := *out.Reservations[0].Instances[0].PublicDnsName
+
+	return ip, nil
 }
 
 func (c *Client) StartInstance(id string) error {

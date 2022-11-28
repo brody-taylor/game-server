@@ -5,9 +5,10 @@ import (
 )
 
 const (
-	ConnectMethod          = "Connect"
-	GetInstanceStateMethod = "GetInstanceState"
-	StartInstanceMethod    = "StartInstance"
+	ConnectMethod            = "Connect"
+	GetInstanceStateMethod   = "GetInstanceState"
+	GetInstanceAddressMethod = "GetInstanceAddress"
+	StartInstanceMethod      = "StartInstance"
 )
 
 // Ensure MockClient implements ClientIFace
@@ -23,6 +24,11 @@ func (m *MockClient) Connect() error {
 }
 
 func (m *MockClient) GetInstanceState(id string) (string, error) {
+	args := m.Called(id)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockClient) GetInstanceAddress(id string) (string, error) {
 	args := m.Called(id)
 	return args.String(0), args.Error(1)
 }
