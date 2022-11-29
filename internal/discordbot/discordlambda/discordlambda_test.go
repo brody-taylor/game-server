@@ -102,8 +102,8 @@ func Test_Handle_Ping(t *testing.T) {
 
 			// Setup event
 			eventHeaders := map[string]string{
-				SignatureHeader: signature,
-				TimestampHeader: timestamp,
+				discordbot.SignatureHeader: signature,
+				discordbot.TimestampHeader: timestamp,
 			}
 			event := events.APIGatewayV2HTTPRequest{
 				Headers: eventHeaders,
@@ -131,8 +131,8 @@ func Test_Handle_Instance(t *testing.T) {
 	timestamp := time.Now().String()
 	signature := hex.EncodeToString(crypto.Sign(privateKey, append([]byte(timestamp), eventBody...)))
 	headers := map[string]string{
-		SignatureHeader: signature,
-		TimestampHeader: timestamp,
+		discordbot.SignatureHeader: signature,
+		discordbot.TimestampHeader: timestamp,
 	}
 	event := events.APIGatewayV2HTTPRequest{
 		Headers: headers,

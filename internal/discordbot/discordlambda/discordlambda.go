@@ -3,7 +3,6 @@ package discordlambda
 import (
 	"bytes"
 	crypto "crypto/ed25519"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 
@@ -21,9 +21,6 @@ import (
 const (
 	EnvInstanceId = "INSTANCE_ID"
 	EnvPublicKey  = "PUBLIC_KEY"
-
-	SignatureHeader = "x-signature-ed25519"
-	TimestampHeader = "x-signature-timestamp"
 )
 
 var (
@@ -70,13 +67,20 @@ type Handler struct {
 	publicKey  crypto.PublicKey
 	instanceId string
 
+	httpClient *http.Client
+
 	// AWS
 	instanceClient instance.ClientIFace
 }
 
 func New() *Handler {
+	// Configure HTTP client
+	httpClient := http.DefaultClient
+	httpClient.Timeout = 3 * time.Second
+
 	return &Handler{
 		logger:         log.Default(),
+		httpClient:     httpClient,
 		instanceClient: instance.New(),
 	}
 }
@@ -88,12 +92,14 @@ func (h *Handler) Handle(event events.APIGatewayV2HTTPRequest) events.APIGateway
 	}
 
 	// Verify request signature
-	if !h.verify(event) {
+	eventBody := []byte(event.Body)
+	timestamp := event.Headers[discordbot.TimestampHeader]
+	signature := event.Headers[discordbot.SignatureHeader]
+	if !discordbot.Authenticate(eventBody, timestamp, signature, h.publicKey) {
 		return unauthorizedResponse
 	}
 
 	// Parse request from event body
-	eventBody := []byte(event.Body)
 	var req discordbot.Request
 	if err := json.Unmarshal(eventBody, &req); err != nil {
 		return badRequestResponse
@@ -139,7 +145,7 @@ func (h *Handler) Handle(event events.APIGatewayV2HTTPRequest) events.APIGateway
 	}
 
 	// Forward request to server
-	return h.forwardToInstance(eventBody)
+	return h.forwardToInstance(eventBody, event.Headers)
 }
 
 func (h *Handler) loadEnv() error {
@@ -155,26 +161,14 @@ func (h *Handler) loadEnv() error {
 
 	// Decode public key
 	var err error
-	h.publicKey, err = hex.DecodeString(publicKey)
-	if err != nil {
+	if h.publicKey, err = discordbot.DecodePublicKey(publicKey); err != nil {
 		return fmt.Errorf("invalid public key")
 	}
 
 	return nil
 }
 
-func (h *Handler) verify(event events.APIGatewayV2HTTPRequest) bool {
-	signature, err := hex.DecodeString(event.Headers[SignatureHeader])
-	if err != nil {
-		return false
-	}
-	timestamp := event.Headers[TimestampHeader]
-	msg := []byte(timestamp + event.Body)
-
-	return crypto.Verify(h.publicKey, msg, signature)
-}
-
-func (h *Handler) forwardToInstance(reqBody []byte) events.APIGatewayV2HTTPResponse {
+func (h *Handler) forwardToInstance(reqBody []byte, headers map[string]string) events.APIGatewayV2HTTPResponse {
 	// Get endpoint
 	instanceAddress, err := h.instanceClient.GetInstanceAddress(h.instanceId)
 	if err != nil {
@@ -183,8 +177,17 @@ func (h *Handler) forwardToInstance(reqBody []byte) events.APIGatewayV2HTTPRespo
 	}
 	endpoint := fmt.Sprintf("http://%s%s", instanceAddress, discordbot.BotEndpoint)
 
+	// Build HTTP request
+	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(reqBody))
+	if err != nil {
+		h.logger.Print(err)
+		return internalErrorResponse
+	}
+	req.Header.Set(discordbot.SignatureHeader, headers[discordbot.SignatureHeader])
+	req.Header.Set(discordbot.TimestampHeader, headers[discordbot.TimestampHeader])
+
 	// Make HTTP call
-	rsp, err := http.Post(endpoint, "application/json", bytes.NewBuffer(reqBody))
+	rsp, err := h.httpClient.Do(req)
 	if err != nil {
 		h.logger.Print(err)
 		return internalErrorResponse
