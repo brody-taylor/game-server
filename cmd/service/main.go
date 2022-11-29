@@ -1,14 +1,10 @@
 package main
 
 import (
-	"log"
-	
-	"game-server/internal/discordbot"
+	"game-server/internal/service"
 )
 
 func main() {
-	bot := discordbot.New()
-	if err := bot.Run(); err != nil {
-		log.Fatal(err)
-	}
+	s := service.New()
+	s.Run()
 }
