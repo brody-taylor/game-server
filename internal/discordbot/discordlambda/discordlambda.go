@@ -16,11 +16,13 @@ import (
 
 	"game-server/internal/discordbot"
 	"game-server/pkg/aws/instance"
+	"game-server/pkg/aws/sqs"
 )
 
 const (
-	EnvInstanceId = "INSTANCE_ID"
 	EnvPublicKey  = "PUBLIC_KEY"
+	EnvInstanceId = "INSTANCE_ID"
+	EnvSqsUrl     = "MESSAGE_QUEUE_URL"
 )
 
 var (
@@ -66,11 +68,13 @@ type Handler struct {
 	// Env variables
 	publicKey  crypto.PublicKey
 	instanceId string
+	sqsUrl     string
 
 	httpClient *http.Client
 
 	// AWS
 	instanceClient instance.ClientIFace
+	sqsClient      sqs.ClientIFace
 }
 
 func New() *Handler {
@@ -82,6 +86,7 @@ func New() *Handler {
 		logger:         log.Default(),
 		httpClient:     httpClient,
 		instanceClient: instance.New(),
+		sqsClient:      sqs.New(),
 	}
 }
 
@@ -123,39 +128,55 @@ func (h *Handler) Handle(event events.APIGatewayV2HTTPRequest) events.APIGateway
 		return internalErrorResponse
 	}
 
-	// Start instance if not currently running
-	if state, err := h.instanceClient.GetInstanceState(h.instanceId); err != nil {
+	// Get instance state
+	state, err := h.instanceClient.GetInstanceState(h.instanceId)
+	if err != nil {
 		h.logger.Print(err)
 		return internalErrorResponse
+	}
 
-	} else if state == instance.InstancePendingState {
+	switch state {
+	// Forward request to server when it's already running
+	case instance.InstanceRunningState:
+		return h.forwardToInstance(eventBody, event.Headers)
+
+	case instance.InstancePendingState:
 		// TODO: return deferred response and add msg details to SQS
 		// OR return error response indicating server is still starting up
 		return internalErrorResponse
 
-	} else if state != instance.InstanceRunningState {
+	// Start server and send deferred response when it's not already running or starting up
+	default:
 		// Attempt to start
 		if err := h.instanceClient.StartInstance(h.instanceId); err != nil {
 			h.logger.Print(err)
 			return internalErrorResponse
 		}
 
-		// TODO: return deferred response and add msg details to SQS
-		return internalErrorResponse
-	}
+		// Forward request to deferred message queue
+		h.sqsClient.ConnectWithSession(h.instanceClient.GetSession())
+		if err := h.sqsClient.Send(h.sqsUrl, event.Body); err != nil {
+			h.logger.Print(err)
+			return internalErrorResponse
+		}
 
-	// Forward request to server
-	return h.forwardToInstance(eventBody, event.Headers)
+		// TODO: return deferred response
+		return events.APIGatewayV2HTTPResponse{
+			StatusCode: http.StatusOK,
+		}
+	}
 }
 
 func (h *Handler) loadEnv() error {
 	// Get expected env variables
-	h.instanceId = os.Getenv(EnvInstanceId)
 	publicKey := os.Getenv(EnvPublicKey)
-	if h.instanceId == "" || publicKey == "" {
+	h.instanceId = os.Getenv(EnvInstanceId)
+	h.sqsUrl = os.Getenv(EnvSqsUrl)
+	if publicKey == "" || h.instanceId == "" || h.sqsUrl == "" {
 		return MissingEnvErr{envMap: map[string]string{
-			EnvInstanceId: h.instanceId,
 			EnvPublicKey:  publicKey,
+			EnvInstanceId: h.instanceId,
+			EnvSqsUrl:     h.sqsUrl,
 		}}
 	}
 

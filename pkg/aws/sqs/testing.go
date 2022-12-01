@@ -1,4 +1,4 @@
-package instance
+package sqs
 
 import (
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -9,9 +9,7 @@ const (
 	ConnectMethod            = "Connect"
 	ConnectWithSessionMethod = "ConnectWithSession"
 	GetSessionMethod         = "GetSession"
-	GetInstanceStateMethod   = "GetInstanceState"
-	GetInstanceAddressMethod = "GetInstanceAddress"
-	StartInstanceMethod      = "StartInstance"
+	SendMethod               = "Send"
 )
 
 // Ensure MockClient implements ClientIFace
@@ -35,17 +33,7 @@ func (m *MockClient) GetSession() *session.Session {
 	return args.Get(0).(*session.Session)
 }
 
-func (m *MockClient) GetInstanceState(id string) (string, error) {
-	args := m.Called(id)
-	return args.String(0), args.Error(1)
-}
-
-func (m *MockClient) GetInstanceAddress(id string) (string, error) {
-	args := m.Called(id)
-	return args.String(0), args.Error(1)
-}
-
-func (m *MockClient) StartInstance(id string) error {
-	args := m.Called(id)
+func (m *MockClient) Send(queueUrl string, msg string) error {
+	args := m.Called(queueUrl, msg)
 	return args.Error(0)
 }

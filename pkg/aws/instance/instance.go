@@ -27,6 +27,8 @@ var _ ClientIFace = (*Client)(nil)
 
 type ClientIFace interface {
 	Connect() error
+	ConnectWithSession(awsSession *session.Session)
+	GetSession() *session.Session
 	GetInstanceState(id string) (state string, err error)
 	GetInstanceAddress(id string) (address string, err error)
 	StartInstance(id string) error
@@ -50,14 +52,22 @@ func New() *Client {
 }
 
 func (c *Client) Connect() error {
-	var err error
-	c.session, err = session.NewSession(c.cfg)
+	awsSession, err := session.NewSession(c.cfg)
 	if err != nil {
 		return err
 	}
 
-	c.instanceClient = ec2.New(c.session, c.cfg)
+	c.ConnectWithSession(awsSession)
 	return nil
+}
+
+func (c *Client) ConnectWithSession(awsSession *session.Session) {
+	c.session = awsSession
+	c.instanceClient = ec2.New(c.session, c.cfg)
+}
+
+func (c *Client) GetSession() *session.Session {
+	return c.session
 }
 
 func (c *Client) GetInstanceState(id string) (string, error) {

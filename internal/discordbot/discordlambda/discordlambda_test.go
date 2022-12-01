@@ -12,11 +12,13 @@ import (
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"game-server/internal/discordbot"
 	"game-server/pkg/aws/instance"
+	"game-server/pkg/aws/sqs"
 )
 
 func Test_Handle_Ping(t *testing.T) {
@@ -35,6 +37,8 @@ func Test_Handle_Ping(t *testing.T) {
 	// Set required env variables
 	os.Setenv(EnvInstanceId, "instance-id")
 	defer os.Unsetenv(EnvInstanceId)
+	os.Setenv(EnvSqsUrl, "sqsurl")
+	defer os.Unsetenv(EnvSqsUrl)
 
 	h := Handler{logger: log.Default()}
 
@@ -122,7 +126,7 @@ func Test_Handle_Ping(t *testing.T) {
 	}
 }
 
-func Test_Handle_Instance(t *testing.T) {
+func Test_Handle_Aws(t *testing.T) {
 	// Build event
 	pubKey, privateKey, err := crypto.GenerateKey(nil)
 	require.NoError(t, err)
@@ -144,6 +148,9 @@ func Test_Handle_Instance(t *testing.T) {
 	os.Setenv(EnvInstanceId, instanceId)
 	defer os.Unsetenv(EnvInstanceId)
 	os.Setenv(EnvPublicKey, hex.EncodeToString(pubKey))
+	sqsUrl := "sqsurl"
+	os.Setenv(EnvSqsUrl, sqsUrl)
+	defer os.Unsetenv(EnvSqsUrl)
 
 	mockErr := errors.New("mock error")
 	tests := []struct {
@@ -155,28 +162,35 @@ func Test_Handle_Instance(t *testing.T) {
 		startErr      error
 		getAddress    string
 		getAddressErr error
+		sqsSendErr    error
 	}{
 		{
-			name:          "Sad Path - AWS Connection Error",
+			name:          "Sad Path - AWS connection error",
 			expStatusCode: http.StatusInternalServerError,
 			connectErr:    mockErr,
 		},
 		{
-			name:          "Sad Path - Get State Error",
+			name:          "Sad Path - Get state error",
 			expStatusCode: http.StatusInternalServerError,
 			getStateErr:   mockErr,
 		},
 		{
-			name:          "Sad Path - Start Error",
+			name:          "Sad Path - Start error",
 			expStatusCode: http.StatusInternalServerError,
 			getState:      instance.InstanceStoppedState,
 			startErr:      mockErr,
 		},
 		{
-			name:          "Sad Path - Get Instance Address Error",
+			name:          "Sad Path - Get instance address error",
 			expStatusCode: http.StatusInternalServerError,
 			getState:      instance.InstanceRunningState,
 			getAddressErr: mockErr,
+		},
+		{
+			name:          "Sad Path - Send to SQS error",
+			expStatusCode: http.StatusInternalServerError,
+			getState:      instance.InstanceStoppedState,
+			sqsSendErr:    mockErr,
 		},
 	}
 	for _, tt := range tests {
@@ -187,9 +201,18 @@ func Test_Handle_Instance(t *testing.T) {
 			mockInstanceClient.On(instance.GetInstanceStateMethod, instanceId).Return(tt.getState, tt.getStateErr)
 			mockInstanceClient.On(instance.StartInstanceMethod, instanceId).Return(tt.startErr)
 			mockInstanceClient.On(instance.GetInstanceAddressMethod, instanceId).Return(tt.getAddress, tt.getAddressErr)
+			awsSession := &session.Session{}
+			mockInstanceClient.On(instance.GetSessionMethod).Return(awsSession)
+
+			// Setup mock SQS client
+			mockSqsClient := new(sqs.MockClient)
+			mockSqsClient.On(sqs.ConnectWithSessionMethod, awsSession).Return()
+			mockSqsClient.On(sqs.SendMethod, sqsUrl, event.Body).Return(tt.sqsSendErr)
+
 			h := Handler{
 				logger:         log.Default(),
 				instanceClient: mockInstanceClient,
+				sqsClient:      mockSqsClient,
 			}
 
 			rsp := h.Handle(event)
