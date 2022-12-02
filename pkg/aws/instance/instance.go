@@ -2,10 +2,8 @@ package instance
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
@@ -18,8 +16,6 @@ const (
 	InstanceStoppedState      = "stopped"
 	InstanceShuttingDownState = "shutting-down"
 	InstanceTerminatedState   = "terminated"
-
-	EnvRegion = "AWS_REGION"
 )
 
 // Ensure Client implements ClientIFace
@@ -41,11 +37,7 @@ type Client struct {
 }
 
 func New() *Client {
-	cred := credentials.NewEnvCredentials()
 	cfg := aws.NewConfig()
-	cfg.WithRegion(os.Getenv(EnvRegion))
-	cfg.WithCredentials(cred)
-
 	return &Client{
 		cfg: cfg,
 	}

@@ -1,18 +1,13 @@
 package sqs
 
 import (
-	"os"
-
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
 )
 
 const (
-	EnvRegion = "AWS_REGION"
-
 	groupId   = "default"
 )
 
@@ -33,11 +28,7 @@ type Client struct {
 }
 
 func New() *Client {
-	cred := credentials.NewEnvCredentials()
 	cfg := aws.NewConfig()
-	cfg.WithRegion(os.Getenv(EnvRegion))
-	cfg.WithCredentials(cred)
-
 	return &Client{
 		cfg: cfg,
 	}
