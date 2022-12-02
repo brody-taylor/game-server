@@ -2,6 +2,7 @@ package sqs
 
 import (
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -36,4 +37,9 @@ func (m *MockClient) GetSession() *session.Session {
 func (m *MockClient) Send(queueUrl string, msg string) error {
 	args := m.Called(queueUrl, msg)
 	return args.Error(0)
+}
+
+func (m *MockClient) Receive(queueUrl string) (*sqs.Message, error) {
+	args := m.Called(queueUrl)
+	return args.Get(0).(*sqs.Message), args.Error(1)
 }

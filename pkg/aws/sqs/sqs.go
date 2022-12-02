@@ -19,6 +19,7 @@ type ClientIFace interface {
 	ConnectWithSession(awsSession *session.Session)
 	GetSession() *session.Session
 	Send(queueUrl string, message string) error
+	Receive(queueUrl string) (*sqs.Message, error)
 }
 
 type Client struct {
@@ -59,4 +60,17 @@ func (c *Client) Send(queueUrl string, msg string) error {
 		MessageGroupId: aws.String(groupId),
 	})
 	return req.Send()
+}
+
+func (c *Client) Receive(queueUrl string) (*sqs.Message, error) {
+	req := &sqs.ReceiveMessageInput{
+		QueueUrl: aws.String(queueUrl),
+	}
+	rsp, err := c.sqsClient.ReceiveMessage(req)
+	if err != nil {
+		return nil, err
+	} else if len(rsp.Messages) > 0 {
+		return rsp.Messages[0], nil
+	}
+	return nil, nil
 }
