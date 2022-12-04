@@ -1,0 +1,16 @@
+[
+    {
+        "name": "MockGame",
+        "description": "Description for Mock Game",
+        "working_directory": "mockserver",
+        "run": {
+            "command": "go",
+            "args": [
+                "run",
+                "mockserver.go"
+            ]
+        },
+        "message": "/message",
+        "stop": "/stop"
+    }
+]
