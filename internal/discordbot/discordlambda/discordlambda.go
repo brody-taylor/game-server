@@ -18,6 +18,7 @@ import (
 	"game-server/internal/discordbot"
 	"game-server/pkg/aws/instance"
 	"game-server/pkg/aws/sqs"
+	customError "game-server/pkg/errors"
 )
 
 const (
@@ -42,26 +43,6 @@ var (
 		Body:       "Internal server error",
 	}
 )
-
-type MissingEnvErr struct {
-	envMap map[string]string
-}
-
-func (e MissingEnvErr) Error() string {
-	// Get keys of missing environment variables
-	missingKeys := make([]string, 0, len(e.envMap))
-	for key, val := range e.envMap {
-		if val == "" {
-			missingKeys = append(missingKeys, key)
-		}
-	}
-
-	if len(missingKeys) > 0 {
-		allKeys := strings.Join(missingKeys, ", ")
-		return fmt.Sprintf("insufficient env variables: [%s]", allKeys)
-	}
-	return "insufficient env variables"
-}
 
 type Handler struct {
 	logger *log.Logger
@@ -174,7 +155,7 @@ func (h *Handler) loadEnv() error {
 	h.instanceId = os.Getenv(EnvInstanceId)
 	h.sqsUrl = os.Getenv(EnvSqsUrl)
 	if publicKey == "" || h.instanceId == "" || h.sqsUrl == "" {
-		return MissingEnvErr{envMap: map[string]string{
+		return customError.MissingEnvErr{EnvMap: map[string]string{
 			EnvPublicKey:  publicKey,
 			EnvInstanceId: h.instanceId,
 			EnvSqsUrl:     h.sqsUrl,
