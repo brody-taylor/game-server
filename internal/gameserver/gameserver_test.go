@@ -3,20 +3,17 @@ package gameserver
 import (
 	"bufio"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"game-server/internal/config"
 )
 
 func Test_Run_and_Stop(t *testing.T) {
-	// Set config path to mock config
-	os.Setenv(EnvGameConfig, "mockserver/mockconfig.json")
-	defer os.Unsetenv(EnvGameConfig)
-
 	// Override shutdown delay
 	defer func(origDelay time.Duration) {
 		ServerShutdownDelay = origDelay
@@ -24,12 +21,13 @@ func Test_Run_and_Stop(t *testing.T) {
 	newDelay := 10 * time.Millisecond
 	ServerShutdownDelay = newDelay
 
-	// Load mock config
-	c := New()
-	require.NoError(t, c.Load())
+	// Get test config
+	testCfg, err := config.NewTestConfig()
+	require.NoError(t, err)
 
 	// Start mock server
-	require.NoError(t, c.Run(MockServerGameName))
+	c := New(testCfg)
+	require.NoError(t, c.Run(config.MockGameName))
 	time.Sleep(10 * time.Millisecond)
 
 	// Record stdout from mock server

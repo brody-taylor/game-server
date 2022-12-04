@@ -5,16 +5,10 @@ import (
 )
 
 const (
-	MockServerGameName = "MockGame"
-
 	// Mock server messages
 	MockServerStartupMessage   = "Started mock server"
 	MockServerShutdownResponse = "Got shutdown command"
 	MockServerShutdownMessage  = "Closing mock server"
-
-	// Mock server commands
-	MockServerMessageCommand = "/message"
-	MockServerStopCommand    = "/stop"
 
 	LoadMethod = "Load"
 	RunMethod  = "Run"
@@ -26,11 +20,6 @@ var _ ClientIFace = (*MockClient)(nil)
 
 type MockClient struct {
 	mock.Mock
-}
-
-func (m *MockClient) Load() error {
-	args := m.Called()
-	return args.Error(0)
 }
 
 func (m *MockClient) Run(game string) error {

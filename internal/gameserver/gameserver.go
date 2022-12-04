@@ -1,19 +1,16 @@
 package gameserver
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
+
+	"game-server/internal/config"
 )
 
 const (
-	EnvGameConfig = "GAME_CONFIG_PATH"
-
 	ServerShutdownWarning = "Server shutting down in %s"
 )
 
@@ -26,48 +23,23 @@ var (
 var _ ClientIFace = (*Client)(nil)
 
 type ClientIFace interface {
-	Load() error
 	Run(game string) error
 	Stop() error
 }
 
 type Client struct {
-	games   map[string]gameConfig
+	cfg     *config.Config
 	running *server
 }
 
-type gameConfig struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	WorkingDir  string `json:"working_directory"`
-	Run         struct {
-		Command string   `json:"command"`
-		Args    []string `json:"args"`
-	} `json:"run"`
-	Message string `json:"message"`
-	Stop    string `json:"stop"`
-}
-
-func New() *Client {
-	return &Client{}
-}
-
-func (c *Client) Load() error {
-	// Load config
-	cfg, err := readAndParseConfig()
-	if err != nil {
-		return err
+func New(cfg *config.Config) *Client {
+	return &Client{
+		cfg: cfg,
 	}
-
-	c.games = make(map[string]gameConfig, len(cfg))
-	for _, gameCfg := range cfg {
-		c.games[strings.ToLower(gameCfg.Name)] = gameCfg
-	}
-	return nil
 }
 
 func (c *Client) Run(game string) error {
-	gameCfg, ok := c.games[strings.ToLower(game)]
+	gameCfg, ok := c.cfg.GetGameConfig(game)
 	if !ok {
 		return fmt.Errorf("no configuration for game: [%s]", game)
 	}
@@ -116,7 +88,7 @@ type server struct {
 	outErr io.Reader
 }
 
-func newGameServer(cfg gameConfig) (*server, error) {
+func newGameServer(cfg *config.GameConfig) (*server, error) {
 	s := &server{
 		run:  exec.Command(cfg.Run.Command, cfg.Run.Args...),
 		stop: cfg.Stop,
@@ -179,19 +151,4 @@ func (s *server) stopServer() error {
 	case <-time.After(ServerShutdownTimeout):
 		return s.run.Process.Kill()
 	}
-}
-
-func readAndParseConfig() ([]gameConfig, error) {
-	filePath, ok := os.LookupEnv(EnvGameConfig)
-	if !ok {
-		return nil, fmt.Errorf("missing env for game config path: [%s]", EnvGameConfig)
-	}
-
-	fileData, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-
-	var config []gameConfig
-	return config, json.Unmarshal(fileData, &config)
 }
