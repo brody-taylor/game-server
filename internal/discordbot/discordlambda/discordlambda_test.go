@@ -13,6 +13,7 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/bwmarrin/discordgo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -30,7 +31,9 @@ func Test_Handle_Ping(t *testing.T) {
 	badHex := "!@#$%^&*()"
 	timestamp := time.Now().String()
 
-	pingReq, err := json.Marshal(discordbot.Request{Type: discordbot.RequestTypePing})
+	pingReq, err := json.Marshal(discordgo.Interaction{
+		Type: discordgo.InteractionPing,
+	})
 	require.NoError(t, err)
 	pingReqString := string(pingReq)
 
@@ -45,7 +48,7 @@ func Test_Handle_Ping(t *testing.T) {
 	tests := []struct {
 		name          string
 		eventBody     string
-		expBody       discordbot.Response
+		expBody       discordgo.InteractionResponse
 		expStatusCode int
 		pubKeyEnv     string
 		badSignature  string
@@ -53,7 +56,7 @@ func Test_Handle_Ping(t *testing.T) {
 		{
 			name:          "Happy path - Ping acknowlegement",
 			eventBody:     pingReqString,
-			expBody:       discordbot.Response{Type: discordbot.ResponseTypePong},
+			expBody:       discordgo.InteractionResponse{Type: discordgo.InteractionResponsePong},
 			expStatusCode: http.StatusOK,
 			pubKeyEnv:     pubKeyString,
 		},
@@ -118,7 +121,7 @@ func Test_Handle_Ping(t *testing.T) {
 
 			require.Equal(t, tt.expStatusCode, rsp.StatusCode)
 			if tt.expStatusCode == http.StatusOK {
-				var gotBody discordbot.Response
+				var gotBody discordgo.InteractionResponse
 				require.NoError(t, json.Unmarshal([]byte(rsp.Body), &gotBody))
 				assert.Equal(t, tt.expBody, gotBody)
 			}
@@ -127,10 +130,13 @@ func Test_Handle_Ping(t *testing.T) {
 }
 
 func Test_Handle_Aws(t *testing.T) {
-	// Build event
 	pubKey, privateKey, err := crypto.GenerateKey(nil)
 	require.NoError(t, err)
-	eventBody, err := json.Marshal(discordbot.Request{Type: 2})
+
+	// Build event
+	eventBody, err := json.Marshal(discordgo.Interaction{
+		Type: discordgo.InteractionApplicationCommand,
+	})
 	require.NoError(t, err)
 	timestamp := time.Now().String()
 	signature := hex.EncodeToString(crypto.Sign(privateKey, append([]byte(timestamp), eventBody...)))

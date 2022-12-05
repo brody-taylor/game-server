@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
+	"github.com/bwmarrin/discordgo"
 
 	"game-server/internal/discordbot"
 	"game-server/pkg/aws/instance"
@@ -105,15 +106,15 @@ func (h *Handler) Handle(event events.APIGatewayV2HTTPRequest) events.APIGateway
 	}
 
 	// Parse request from event body
-	var req discordbot.Request
+	var req discordgo.Interaction
 	if err := json.Unmarshal(eventBody, &req); err != nil {
 		return badRequestResponse
 	}
 
 	// Acknowledges a ping
-	if req.Type == discordbot.RequestTypePing {
-		rsp := discordbot.Response{
-			Type: discordbot.ResponseTypePong,
+	if req.Type == discordgo.InteractionPing {
+		rsp := discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponsePong,
 		}
 		body, _ := json.Marshal(rsp)
 		return events.APIGatewayV2HTTPResponse{

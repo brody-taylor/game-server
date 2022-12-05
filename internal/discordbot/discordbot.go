@@ -8,7 +8,9 @@ import (
 	"io"
 	"net/http"
 	"os"
-	
+
+	"github.com/bwmarrin/discordgo"
+
 	"game-server/pkg/aws/sqs"
 )
 
@@ -75,7 +77,7 @@ func (b *BotServer) checkMessageQueue() error {
 	}
 
 	// Parse request from message
-	var req Request
+	var req discordgo.Interaction
 	if err := json.Unmarshal([]byte(*msg.Body), &req); err != nil {
 		return err
 	}
@@ -106,19 +108,20 @@ func (b *BotServer) eventHandler(w http.ResponseWriter, r *http.Request) {
 	writeResponse(rsp, w)
 }
 
-func (b *BotServer) reqHandler(req Request) (Response, error) {
-	var rsp Response
+func (b *BotServer) reqHandler(req discordgo.Interaction) (discordgo.InteractionResponse, error) {
+	var rsp discordgo.InteractionResponse
 
 	// Validate
-	if req.Type != RequestTypeApplicationCommand || req.Data.Type != RequestDataTypeChatInput {
+	if req.Type != discordgo.InteractionApplicationCommand {
 		return rsp, errors.New("unsupported interaction type")
 	}
-
+	
 	// TODO: forward command and get response message
-	cmd := req.Data.Name
-	rsp = Response{
-		Type: ResponseTypeChannelMessage,
-		Data: responseData{
+	reqData := req.ApplicationCommandData()
+	cmd := reqData.Name
+	rsp = discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
 			Content: fmt.Sprintf("Recieved command: [%s]", cmd),
 		},
 	}
@@ -126,7 +129,7 @@ func (b *BotServer) reqHandler(req Request) (Response, error) {
 	return rsp, nil
 }
 
-func parseAndVerifyRequest(r *http.Request, publicKey crypto.PublicKey) (req Request, verified bool, err error) {
+func parseAndVerifyRequest(r *http.Request, publicKey crypto.PublicKey) (req discordgo.Interaction, verified bool, err error) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return req, verified, err
@@ -142,7 +145,7 @@ func parseAndVerifyRequest(r *http.Request, publicKey crypto.PublicKey) (req Req
 	return req, verified, err
 }
 
-func writeResponse(rsp Response, w http.ResponseWriter) {
+func writeResponse(rsp discordgo.InteractionResponse, w http.ResponseWriter) {
 	jsonRsp, err := json.Marshal(rsp)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
