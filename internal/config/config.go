@@ -44,6 +44,14 @@ func (c *Config) GetGameConfig(game string) (*GameConfig, bool) {
 	return cfg, ok
 }
 
+func (c *Config) GetGameNames() []string {
+	names := make([]string, 0, len(c.games))
+	for _, gameCfg := range c.games {
+		names = append(names, gameCfg.Name)
+	}
+	return names
+}
+
 func (c *Config) loadGameConfig() error {
 	filePath, ok := os.LookupEnv(EnvGameConfig)
 	if !ok {
