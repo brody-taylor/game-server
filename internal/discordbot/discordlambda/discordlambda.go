@@ -78,6 +78,18 @@ func (h *Handler) Handle(event events.APIGatewayV2HTTPRequest) events.APIGateway
 		return internalErrorResponse
 	}
 
+	rsp := h.handle(event)
+
+	// Set content-type header in response
+	if rsp.Headers == nil {
+		rsp.Headers = make(map[string]string, 1)
+	}
+	rsp.Headers["Content-Type"] = "application/json"
+
+	return rsp
+}
+
+func (h *Handler) handle(event events.APIGatewayV2HTTPRequest) events.APIGatewayV2HTTPResponse {
 	// Verify request signature
 	eventBody := []byte(event.Body)
 	timestamp := event.Headers[discordbot.TimestampHeader]
