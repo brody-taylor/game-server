@@ -104,7 +104,7 @@ func (h *Handler) handle(event events.APIGatewayV2HTTPRequest) events.APIGateway
 		return badRequestResponse
 	}
 
-	// Acknowledges a ping
+	// Acknowledge a ping
 	if req.Type == discordgo.InteractionPing {
 		rsp := discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponsePong,
@@ -134,10 +134,19 @@ func (h *Handler) handle(event events.APIGatewayV2HTTPRequest) events.APIGateway
 	case instance.InstanceRunningState:
 		return h.forwardToInstance(eventBody, event.Headers)
 
+	// Send error message when server is already starting up
 	case instance.InstancePendingState:
-		// TODO: return deferred response and add msg details to SQS
-		// OR return error response indicating server is still starting up
-		return internalErrorResponse
+		rsp := discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "Server is still starting up!",
+			},
+		}
+		body, _ := json.Marshal(rsp)
+		return events.APIGatewayV2HTTPResponse{
+			StatusCode: http.StatusOK,
+			Body:       string(body),
+		}
 
 	// Start server and send deferred response when it's not already running or starting up
 	default:
@@ -154,9 +163,14 @@ func (h *Handler) handle(event events.APIGatewayV2HTTPRequest) events.APIGateway
 			return internalErrorResponse
 		}
 
-		// TODO: return deferred response
+		// Return deferred response
+		rsp := discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		}
+		body, _ := json.Marshal(rsp)
 		return events.APIGatewayV2HTTPResponse{
 			StatusCode: http.StatusOK,
+			Body:       string(body),
 		}
 	}
 }

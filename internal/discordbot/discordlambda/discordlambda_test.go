@@ -22,6 +22,11 @@ import (
 	"game-server/pkg/aws/sqs"
 )
 
+func Test_New(t *testing.T) {
+	h := New()
+	assert.NotNil(t, h)
+}
+
 func Test_Handle_Ping(t *testing.T) {
 	pubKey, privateKey, err := crypto.GenerateKey(nil)
 	require.NoError(t, err)
@@ -162,6 +167,7 @@ func Test_Handle_Aws(t *testing.T) {
 	tests := []struct {
 		name          string
 		expStatusCode int
+		expRspType    discordgo.InteractionResponseType
 		connectErr    error
 		getState      string
 		getStateErr   error
@@ -171,29 +177,41 @@ func Test_Handle_Aws(t *testing.T) {
 		sqsSendErr    error
 	}{
 		{
-			name:          "Sad Path - AWS connection error",
+			name:          "Happy path - Deferred response after starting server",
+			expStatusCode: http.StatusOK,
+			expRspType:    discordgo.InteractionResponseDeferredChannelMessageWithSource,
+			getState:      instance.InstanceStoppedState,
+		},
+		{
+			name:          "Happy path - Channel message if command during startup",
+			expStatusCode: http.StatusOK,
+			expRspType:    discordgo.InteractionResponseChannelMessageWithSource,
+			getState:      instance.InstancePendingState,
+		},
+		{
+			name:          "Sad path - AWS connection error",
 			expStatusCode: http.StatusInternalServerError,
 			connectErr:    mockErr,
 		},
 		{
-			name:          "Sad Path - Get state error",
+			name:          "Sad path - Get state error",
 			expStatusCode: http.StatusInternalServerError,
 			getStateErr:   mockErr,
 		},
 		{
-			name:          "Sad Path - Start error",
+			name:          "Sad path - Start error",
 			expStatusCode: http.StatusInternalServerError,
 			getState:      instance.InstanceStoppedState,
 			startErr:      mockErr,
 		},
 		{
-			name:          "Sad Path - Get instance address error",
+			name:          "Sad path - Get instance address error",
 			expStatusCode: http.StatusInternalServerError,
 			getState:      instance.InstanceRunningState,
 			getAddressErr: mockErr,
 		},
 		{
-			name:          "Sad Path - Send to SQS error",
+			name:          "Sad path - Send to SQS error",
 			expStatusCode: http.StatusInternalServerError,
 			getState:      instance.InstanceStoppedState,
 			sqsSendErr:    mockErr,
@@ -223,7 +241,18 @@ func Test_Handle_Aws(t *testing.T) {
 
 			rsp := h.Handle(event)
 
+			// Check HTTP status code
 			require.Equal(t, tt.expStatusCode, rsp.StatusCode)
+
+			// Check interaction response
+			if tt.expStatusCode == http.StatusOK {
+				var interactionRsp discordgo.InteractionResponse
+				require.NoError(t, json.Unmarshal([]byte(rsp.Body), &interactionRsp))
+				assert.Equal(t, tt.expRspType, interactionRsp.Type)
+				if tt.expRspType == discordgo.InteractionResponseChannelMessageWithSource {
+					assert.NotEmpty(t, interactionRsp.Data.Content)
+				}
+			}
 		})
 	}
 }
