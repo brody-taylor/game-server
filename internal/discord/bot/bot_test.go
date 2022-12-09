@@ -1,4 +1,4 @@
-package discordbot
+package bot
 
 import (
 	crypto "crypto/ed25519"
@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"game-server/pkg/aws/sqs"
+	"game-server/pkg/discord"
 )
 
 func Test_New(t *testing.T) {
@@ -167,8 +168,8 @@ func Test_BotServer_CheckMessageQueue(t *testing.T) {
 			b.sqsClient = mockSqsClient
 
 			// Setup mock discord session
-			mockSession := new(MockDiscordSession)
-			mockSession.On(SessionInteractionResponseEditMethod, mock.Anything, mock.Anything).Return(nil, tt.rspEditErr)
+			mockSession := new(discord.MockDiscordSession)
+			mockSession.On(discord.SessionInteractionResponseEditMethod, mock.Anything, mock.Anything).Return(nil, tt.rspEditErr)
 			b.discordSession = mockSession
 
 			err := b.Run()

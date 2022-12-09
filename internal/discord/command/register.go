@@ -1,4 +1,4 @@
-package discordcmd
+package command
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"game-server/internal/config"
-	"game-server/internal/discordbot"
+	"game-server/pkg/discord"
 	customError "game-server/pkg/errors"
 )
 
@@ -28,7 +28,7 @@ type Client struct {
 	appId string
 	token string
 
-	discordSession discordbot.SessionIFace
+	discordSession discord.SessionIFace
 }
 
 func New(cfg *config.Config) *Client {
@@ -44,7 +44,7 @@ func (c *Client) Connect() error {
 		return err
 	}
 
-	discordSession, err := discordgo.New(fmt.Sprintf(discordbot.BotTokenFormat, c.token))
+	discordSession, err := discordgo.New(fmt.Sprintf(discord.BotTokenFormat, c.token))
 	c.discordSession = discordSession
 	return err
 }

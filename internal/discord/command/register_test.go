@@ -1,4 +1,4 @@
-package discordcmd
+package command
 
 import (
 	"errors"
@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"game-server/internal/config"
-	"game-server/internal/discordbot"
+	"game-server/pkg/discord"
 )
 
 func Test_Connect(t *testing.T) {
@@ -92,8 +92,8 @@ func Test_Register(t *testing.T) {
 			}
 
 			// Setup mock discord session
-			mockSession := new(discordbot.MockDiscordSession)
-			createCall := mockSession.On(discordbot.SessionApplicationCommandCreateMethod, c.appId, "", mock.Anything)
+			mockSession := new(discord.MockDiscordSession)
+			createCall := mockSession.On(discord.SessionApplicationCommandCreateMethod, c.appId, "", mock.Anything)
 			createCall.Return(nil, tt.createErr)
 			c.discordSession = mockSession
 
@@ -131,7 +131,7 @@ func Test_Register(t *testing.T) {
 				require.Error(t, err)
 				assert.EqualError(t, err, tt.expErr)
 			}
-			mockSession.AssertNumberOfCalls(t, discordbot.SessionApplicationCommandCreateMethod, len(commands))
+			mockSession.AssertNumberOfCalls(t, discord.SessionApplicationCommandCreateMethod, len(commands))
 		})
 	}
 }
@@ -171,9 +171,9 @@ func Test_Clear(t *testing.T) {
 			}
 
 			// Setup mock discord session
-			mockSession := new(discordbot.MockDiscordSession)
-			mockSession.On(discordbot.SessionApplicationCommandsMethod, c.appId, "").Return(commands, tt.getCmdsErr)
-			mockSession.On(discordbot.SessionApplicationCommandDeleteMethod, c.appId, "", mock.Anything).Return(tt.deleteErr)
+			mockSession := new(discord.MockDiscordSession)
+			mockSession.On(discord.SessionApplicationCommandsMethod, c.appId, "").Return(commands, tt.getCmdsErr)
+			mockSession.On(discord.SessionApplicationCommandDeleteMethod, c.appId, "", mock.Anything).Return(tt.deleteErr)
 			c.discordSession = mockSession
 
 			err := c.Clear()
@@ -185,7 +185,7 @@ func Test_Clear(t *testing.T) {
 				assert.EqualError(t, err, tt.expErr)
 			}
 			if tt.getCmdsErr == nil {
-				mockSession.AssertNumberOfCalls(t, discordbot.SessionApplicationCommandDeleteMethod, len(commands))
+				mockSession.AssertNumberOfCalls(t, discord.SessionApplicationCommandDeleteMethod, len(commands))
 			}
 		})
 	}

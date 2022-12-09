@@ -1,6 +1,8 @@
-package discordbot
+package discord
 
 import "github.com/bwmarrin/discordgo"
+
+const BotTokenFormat = "Bot %s"
 
 // Ensure SessionIFace is implemented by discordgo.Session
 var _ SessionIFace = (*discordgo.Session)(nil)

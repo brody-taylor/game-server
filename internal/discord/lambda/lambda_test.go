@@ -1,4 +1,4 @@
-package discordlambda
+package lambda
 
 import (
 	crypto "crypto/ed25519"
@@ -17,9 +17,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"game-server/internal/discordbot"
 	"game-server/pkg/aws/instance"
 	"game-server/pkg/aws/sqs"
+	"game-server/pkg/discord"
 )
 
 func Test_New(t *testing.T) {
@@ -114,8 +114,8 @@ func Test_Handle_Ping(t *testing.T) {
 
 			// Setup event
 			eventHeaders := map[string]string{
-				discordbot.SignatureHeader: signature,
-				discordbot.TimestampHeader: timestamp,
+				discord.SignatureHeader: signature,
+				discord.TimestampHeader: timestamp,
 			}
 			event := events.APIGatewayV2HTTPRequest{
 				Headers: eventHeaders,
@@ -146,8 +146,8 @@ func Test_Handle_Aws(t *testing.T) {
 	timestamp := time.Now().String()
 	signature := hex.EncodeToString(crypto.Sign(privateKey, append([]byte(timestamp), eventBody...)))
 	headers := map[string]string{
-		discordbot.SignatureHeader: signature,
-		discordbot.TimestampHeader: timestamp,
+		discord.SignatureHeader: signature,
+		discord.TimestampHeader: timestamp,
 	}
 	event := events.APIGatewayV2HTTPRequest{
 		Headers: headers,

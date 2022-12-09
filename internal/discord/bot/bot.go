@@ -1,4 +1,4 @@
-package discordbot
+package bot
 
 import (
 	crypto "crypto/ed25519"
@@ -12,6 +12,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"game-server/pkg/aws/sqs"
+	"game-server/pkg/discord"
 	customError "game-server/pkg/errors"
 )
 
@@ -19,8 +20,6 @@ const (
 	EnvPublicKey = "DISCORD_PUBLIC_KEY"
 	EnvBotToken  = "DISCORD_BOT_TOKEN"
 	EnvSqsUrl    = "MESSAGE_QUEUE_URL"
-
-	BotTokenFormat = "Bot %s"
 
 	port        = "8080"
 	BotEndpoint = "/discord"
@@ -34,7 +33,7 @@ type BotServer struct {
 	token     string
 	sqsUrl    string
 
-	discordSession SessionIFace
+	discordSession discord.SessionIFace
 	channelId      string
 
 	// AWS
@@ -66,7 +65,7 @@ func (b *BotServer) Connect() error {
 	}
 
 	// Connect to discord session
-	discordSession, err := discordgo.New(fmt.Sprintf(BotTokenFormat, b.token))
+	discordSession, err := discordgo.New(fmt.Sprintf(discord.BotTokenFormat, b.token))
 	b.discordSession = discordSession
 	return err
 }
@@ -100,7 +99,7 @@ func (b *BotServer) loadEnv() error {
 
 	// Decode public key
 	var err error
-	if b.publicKey, err = DecodePublicKey(publicKey); err != nil {
+	if b.publicKey, err = discord.DecodePublicKey(publicKey); err != nil {
 		return fmt.Errorf("invalid public key")
 	}
 
@@ -189,9 +188,9 @@ func parseAndVerifyRequest(r *http.Request, publicKey crypto.PublicKey) (req *di
 		return req, verified, err
 	}
 
-	timestamp := r.Header.Get(TimestampHeader)
-	signature := r.Header.Get(SignatureHeader)
-	if verified = Authenticate(body, timestamp, signature, publicKey); !verified {
+	timestamp := r.Header.Get(discord.TimestampHeader)
+	signature := r.Header.Get(discord.SignatureHeader)
+	if verified = discord.Authenticate(body, timestamp, signature, publicKey); !verified {
 		return req, verified, nil
 	}
 

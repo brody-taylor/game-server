@@ -4,7 +4,7 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 
-	"game-server/internal/discordbot/discordlambda"
+	discordlambda "game-server/internal/discord/lambda"
 )
 
 func main() {

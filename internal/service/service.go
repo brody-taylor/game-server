@@ -3,7 +3,7 @@ package service
 import (
 	"log"
 
-	"game-server/internal/discordbot"
+	discordbot "game-server/internal/discord/bot"
 )
 
 type Service struct {

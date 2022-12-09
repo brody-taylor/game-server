@@ -4,7 +4,7 @@ import (
 	"flag"
 
 	"game-server/internal/config"
-	"game-server/internal/discordbot/discordcmd"
+	"game-server/internal/discord/command"
 )
 
 var doClear = flag.Bool("clear", false, "clear all currently registered commands")
@@ -17,7 +17,7 @@ func main() {
 		panic(err)
 	}
 
-	c := discordcmd.New(cfg)
+	c := command.New(cfg)
 	if err := c.Connect(); err != nil {
 		panic(err)
 	}

@@ -1,4 +1,4 @@
-package discordbot
+package discord
 
 import (
 	crypto "crypto/ed25519"

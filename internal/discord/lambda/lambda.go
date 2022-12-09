@@ -1,4 +1,4 @@
-package discordlambda
+package lambda
 
 import (
 	"bytes"
@@ -15,9 +15,10 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/bwmarrin/discordgo"
 
-	"game-server/internal/discordbot"
+	"game-server/internal/discord/bot"
 	"game-server/pkg/aws/instance"
 	"game-server/pkg/aws/sqs"
+	"game-server/pkg/discord"
 	customError "game-server/pkg/errors"
 )
 
@@ -92,9 +93,9 @@ func (h *Handler) Handle(event events.APIGatewayV2HTTPRequest) events.APIGateway
 func (h *Handler) handle(event events.APIGatewayV2HTTPRequest) events.APIGatewayV2HTTPResponse {
 	// Verify request signature
 	eventBody := []byte(event.Body)
-	timestamp := event.Headers[discordbot.TimestampHeader]
-	signature := event.Headers[discordbot.SignatureHeader]
-	if !discordbot.Authenticate(eventBody, timestamp, signature, h.publicKey) {
+	timestamp := event.Headers[discord.TimestampHeader]
+	signature := event.Headers[discord.SignatureHeader]
+	if !discord.Authenticate(eventBody, timestamp, signature, h.publicKey) {
 		return unauthorizedResponse
 	}
 
@@ -190,7 +191,7 @@ func (h *Handler) loadEnv() error {
 
 	// Decode public key
 	var err error
-	if h.publicKey, err = discordbot.DecodePublicKey(publicKey); err != nil {
+	if h.publicKey, err = discord.DecodePublicKey(publicKey); err != nil {
 		return fmt.Errorf("invalid public key")
 	}
 
@@ -204,7 +205,7 @@ func (h *Handler) forwardToInstance(reqBody []byte, headers map[string]string) e
 		h.logger.Print(err)
 		return internalErrorResponse
 	}
-	endpoint := fmt.Sprintf("http://%s%s", instanceAddress, discordbot.BotEndpoint)
+	endpoint := fmt.Sprintf("http://%s%s", instanceAddress, bot.BotEndpoint)
 
 	// Build HTTP request
 	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(reqBody))
@@ -212,8 +213,8 @@ func (h *Handler) forwardToInstance(reqBody []byte, headers map[string]string) e
 		h.logger.Print(err)
 		return internalErrorResponse
 	}
-	req.Header.Set(discordbot.SignatureHeader, headers[discordbot.SignatureHeader])
-	req.Header.Set(discordbot.TimestampHeader, headers[discordbot.TimestampHeader])
+	req.Header.Set(discord.SignatureHeader, headers[discord.SignatureHeader])
+	req.Header.Set(discord.TimestampHeader, headers[discord.TimestampHeader])
 
 	// Make HTTP call
 	rsp, err := h.httpClient.Do(req)
