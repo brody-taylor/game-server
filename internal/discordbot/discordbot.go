@@ -12,19 +12,30 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"game-server/pkg/aws/sqs"
+	customError "game-server/pkg/errors"
 )
 
 const (
 	EnvPublicKey = "DISCORD_PUBLIC_KEY"
+	EnvBotToken  = "DISCORD_BOT_TOKEN"
 	EnvSqsUrl    = "MESSAGE_QUEUE_URL"
+
+	BotTokenFormat = "Bot %s"
 
 	port        = "8080"
 	BotEndpoint = "/discord"
 )
 
 type BotServer struct {
+	mux http.Handler
+
+	// Env variables
 	publicKey crypto.PublicKey
-	mux       http.Handler
+	token     string
+	sqsUrl    string
+
+	discordSession SessionIFace
+	channelId      string
 
 	// AWS
 	sqsClient sqs.ClientIFace
@@ -43,14 +54,24 @@ func New() *BotServer {
 	return botServer
 }
 
-func (b *BotServer) Run() error {
-	// Get public key
-	if publicKey, err := DecodePublicKey(os.Getenv(EnvPublicKey)); err != nil {
+func (b *BotServer) Connect() error {
+	// Get expected env variables
+	if err := b.loadEnv(); err != nil {
 		return err
-	} else {
-		b.publicKey = publicKey
 	}
 
+	// Connect AWS session
+	if err := b.sqsClient.Connect(); err != nil {
+		return err
+	}
+
+	// Connect to discord session
+	discordSession, err := discordgo.New(fmt.Sprintf(BotTokenFormat, b.token))
+	b.discordSession = discordSession
+	return err
+}
+
+func (b *BotServer) Run() error {
 	// Handle any queued messages
 	if err := b.checkMessageQueue(); err != nil {
 		return err
@@ -64,26 +85,61 @@ func (b *BotServer) Run() error {
 	return err
 }
 
-func (b *BotServer) checkMessageQueue() error {
-	// Connect AWS session
-	if err := b.sqsClient.Connect(); err != nil {
-		return err
+func (b *BotServer) loadEnv() error {
+	// Get expected env variables
+	publicKey := os.Getenv(EnvPublicKey)
+	b.token = os.Getenv(EnvBotToken)
+	b.sqsUrl = os.Getenv(EnvSqsUrl)
+	if publicKey == "" || b.token == "" || b.sqsUrl == "" {
+		return customError.MissingEnvErr{EnvMap: map[string]string{
+			EnvPublicKey: publicKey,
+			EnvBotToken:  b.token,
+			EnvSqsUrl:    b.sqsUrl,
+		}}
 	}
 
+	// Decode public key
+	var err error
+	if b.publicKey, err = DecodePublicKey(publicKey); err != nil {
+		return fmt.Errorf("invalid public key")
+	}
+
+	return nil
+}
+
+func (b *BotServer) checkMessageQueue() error {
 	// Check for any queued messages
-	msg, err := b.sqsClient.Receive(os.Getenv(EnvSqsUrl))
-	if err != nil || msg == nil {
+	msg, err := b.sqsClient.Receive(b.sqsUrl)
+	if err != nil {
 		return err
+	} else if msg == nil {
+		return errors.New("no interaction in deferred message queue")
 	}
 
 	// Parse request from message
-	var req discordgo.Interaction
+	var req *discordgo.Interaction
 	if err := json.Unmarshal([]byte(*msg.Body), &req); err != nil {
 		return err
 	}
 
+	// Set channel ID from the interaction that launched the service
+	b.channelId = req.ChannelID
+
 	// Forward to request handler
-	_, err = b.reqHandler(req)
+	interactionRsp, err := b.reqHandler(req)
+	if err != nil {
+		return err
+	}
+
+	// Update deferred response
+	updatedRsp := &discordgo.WebhookEdit{
+		Content:         &interactionRsp.Data.Content,
+		Components:      &interactionRsp.Data.Components,
+		Embeds:          &interactionRsp.Data.Embeds,
+		Files:           interactionRsp.Data.Files,
+		AllowedMentions: interactionRsp.Data.AllowedMentions,
+	}
+	_, err = b.discordSession.InteractionResponseEdit(req, updatedRsp)
 	return err
 }
 
@@ -108,18 +164,16 @@ func (b *BotServer) eventHandler(w http.ResponseWriter, r *http.Request) {
 	writeResponse(rsp, w)
 }
 
-func (b *BotServer) reqHandler(req discordgo.Interaction) (discordgo.InteractionResponse, error) {
-	var rsp discordgo.InteractionResponse
-
-	// Validate
+func (b *BotServer) reqHandler(req *discordgo.Interaction) (*discordgo.InteractionResponse, error) {
+	// Validate interaction
 	if req.Type != discordgo.InteractionApplicationCommand {
-		return rsp, errors.New("unsupported interaction type")
+		return nil, errors.New("unsupported interaction type")
 	}
-	
-	// TODO: forward command and get response message
+
+	// TODO: forward command to game server client
 	reqData := req.ApplicationCommandData()
 	cmd := reqData.Name
-	rsp = discordgo.InteractionResponse{
+	rsp := &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
 			Content: fmt.Sprintf("Recieved command: [%s]", cmd),
@@ -129,7 +183,7 @@ func (b *BotServer) reqHandler(req discordgo.Interaction) (discordgo.Interaction
 	return rsp, nil
 }
 
-func parseAndVerifyRequest(r *http.Request, publicKey crypto.PublicKey) (req discordgo.Interaction, verified bool, err error) {
+func parseAndVerifyRequest(r *http.Request, publicKey crypto.PublicKey) (req *discordgo.Interaction, verified bool, err error) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return req, verified, err
@@ -145,7 +199,7 @@ func parseAndVerifyRequest(r *http.Request, publicKey crypto.PublicKey) (req dis
 	return req, verified, err
 }
 
-func writeResponse(rsp discordgo.InteractionResponse, w http.ResponseWriter) {
+func writeResponse(rsp *discordgo.InteractionResponse, w http.ResponseWriter) {
 	jsonRsp, err := json.Marshal(rsp)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

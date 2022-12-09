@@ -16,8 +16,6 @@ const (
 	EnvApplicationID = "APPLICATION_ID"
 	EnvBotToken      = "BOT_TOKEN"
 
-	botTokenFormat = "Bot %s"
-
 	registerFailErrorFormat = "following commands failed to register: %s"
 	removeFailErrorFormat   = "following commands failed to remove: %s"
 )
@@ -46,7 +44,7 @@ func (c *Client) Connect() error {
 		return err
 	}
 
-	discordSession, err := discordgo.New(fmt.Sprintf(botTokenFormat, c.token))
+	discordSession, err := discordgo.New(fmt.Sprintf(discordbot.BotTokenFormat, c.token))
 	c.discordSession = discordSession
 	return err
 }

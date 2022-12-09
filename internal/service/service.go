@@ -21,6 +21,9 @@ func New() *Service {
 func (s *Service) Run() {
 	// Start discord bot
 	// TODO: run in separate Goroutine
+	if err := s.botServer.Connect(); err != nil {
+		s.logger.Panic(err)
+	}
 	if err := s.botServer.Run(); err != nil {
 		s.logger.Panic(err)
 	}

@@ -11,6 +11,7 @@ const (
 	ConnectWithSessionMethod = "ConnectWithSession"
 	GetSessionMethod         = "GetSession"
 	SendMethod               = "Send"
+	ReceiveMethod            = "Receive"
 )
 
 // Ensure MockClient implements ClientIFace
@@ -41,5 +42,8 @@ func (m *MockClient) Send(queueUrl string, msg string) error {
 
 func (m *MockClient) Receive(queueUrl string) (*sqs.Message, error) {
 	args := m.Called(queueUrl)
-	return args.Get(0).(*sqs.Message), args.Error(1)
+	if msg := args.Get(0); msg != nil {
+		return msg.(*sqs.Message), args.Error(1)
+	}
+	return nil, args.Error(1)
 }

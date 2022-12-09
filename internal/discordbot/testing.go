@@ -9,6 +9,8 @@ const (
 	SessionApplicationCommandCreateMethod = "ApplicationCommandCreate"
 	SessionApplicationCommandsMethod      = "ApplicationCommands"
 	SessionApplicationCommandDeleteMethod = "ApplicationCommandDelete"
+	SessionInteractionRespondMethod       = "InteractionRespond"
+	SessionInteractionResponseEditMethod  = "InteractionResponseEdit"
 )
 
 // Ensure MockDiscordSession implements SessionIFace
@@ -34,4 +36,17 @@ func (m *MockDiscordSession) ApplicationCommands(appID string, guildID string) (
 func (m *MockDiscordSession) ApplicationCommandDelete(appID string, guildID string, cmdID string) error {
 	args := m.Called(appID, guildID, cmdID)
 	return args.Error(0)
+}
+
+func (m *MockDiscordSession) InteractionRespond(interaction *discordgo.Interaction, resp *discordgo.InteractionResponse) error {
+	args := m.Called(interaction, resp)
+	return args.Error(0)
+}
+
+func (m *MockDiscordSession) InteractionResponseEdit(interaction *discordgo.Interaction, newresp *discordgo.WebhookEdit) (*discordgo.Message, error) {
+	args := m.Called(interaction, newresp)
+	if rspCmd := args.Get(0); rspCmd != nil {
+		return rspCmd.(*discordgo.Message), args.Error(1)
+	}
+	return nil, args.Error(1)
 }
