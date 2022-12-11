@@ -61,7 +61,7 @@ func Test_Handle_Ping(t *testing.T) {
 		{
 			name:          "Happy path - Ping acknowlegement",
 			eventBody:     pingReqString,
-			expBody:       discordgo.InteractionResponse{Type: discordgo.InteractionResponsePong},
+			expBody:       discord.PingResponse,
 			expStatusCode: http.StatusOK,
 			pubKeyEnv:     pubKeyString,
 		},
@@ -179,7 +179,7 @@ func Test_Handle_Aws(t *testing.T) {
 		{
 			name:          "Happy path - Deferred response after starting server",
 			expStatusCode: http.StatusOK,
-			expRspType:    discordgo.InteractionResponseDeferredChannelMessageWithSource,
+			expRspType:    discord.DeferredResponse.Type,
 			getState:      instance.InstanceStoppedState,
 		},
 		{

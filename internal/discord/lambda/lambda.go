@@ -107,13 +107,9 @@ func (h *Handler) handle(event events.APIGatewayV2HTTPRequest) events.APIGateway
 
 	// Acknowledge a ping
 	if req.Type == discordgo.InteractionPing {
-		rsp := discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponsePong,
-		}
-		body, _ := json.Marshal(rsp)
 		return events.APIGatewayV2HTTPResponse{
 			StatusCode: http.StatusOK,
-			Body:       string(body),
+			Body:       string(discord.PingResponseJson),
 		}
 	}
 
@@ -165,13 +161,9 @@ func (h *Handler) handle(event events.APIGatewayV2HTTPRequest) events.APIGateway
 		}
 
 		// Return deferred response
-		rsp := discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-		}
-		body, _ := json.Marshal(rsp)
 		return events.APIGatewayV2HTTPResponse{
 			StatusCode: http.StatusOK,
-			Body:       string(body),
+			Body:       string(discord.DeferredResponseJson),
 		}
 	}
 }
