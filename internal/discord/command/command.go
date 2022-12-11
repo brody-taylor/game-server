@@ -1,6 +1,10 @@
 package command
 
-import "github.com/bwmarrin/discordgo"
+import (
+	"errors"
+
+	"github.com/bwmarrin/discordgo"
+)
 
 const (
 	StartCommand = "start"
@@ -28,4 +32,16 @@ var gameOption = &discordgo.ApplicationCommandOption{
 	Type:        3,
 	Description: "Specify which game",
 	Required:    true,
+}
+
+func GetGameChoice(cmd discordgo.ApplicationCommandInteractionData) (string, error) {
+	for _, c := range cmd.Options {
+		if c.Name == GameOption && c.Type == discordgo.ApplicationCommandOptionString {
+			switch c.Value.(type) {
+			case string:
+				return c.Value.(string), nil
+			}
+		}
+	}
+	return "", errors.New("command missing game choice")
 }

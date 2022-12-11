@@ -15,15 +15,18 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"game-server/internal/discord/command"
+	"game-server/internal/gameserver"
 	"game-server/pkg/aws/sqs"
 	"game-server/pkg/discord"
 )
 
 func Test_New(t *testing.T) {
-	s := New()
+	s := New(new(gameserver.MockClient))
 
 	require.NotNil(t, s)
 	assert.NotNil(t, s.sqsClient)
+	assert.NotNil(t, s.gameClient)
 	assert.NotNil(t, s.mux)
 }
 
@@ -98,11 +101,19 @@ func Test_BotServer_Connect(t *testing.T) {
 
 func Test_BotServer_CheckMessageQueue(t *testing.T) {
 	// Build good mock interaction
+	goodReqGame := "gameName"
 	goodReq := &discordgo.Interaction{
 		ChannelID: "channelId",
 		Type:      discordgo.InteractionApplicationCommand,
 		Data: &discordgo.ApplicationCommandInteractionData{
-			Name: "command",
+			Name: command.StartCommand,
+			Options: []*discordgo.ApplicationCommandInteractionDataOption{
+				{
+					Name:  command.GameOption,
+					Type:  discordgo.ApplicationCommandOptionString,
+					Value: goodReqGame,
+				},
+			},
 		},
 	}
 	goodReqJson, err := json.Marshal(goodReq)
@@ -115,6 +126,11 @@ func Test_BotServer_CheckMessageQueue(t *testing.T) {
 	invalidTypeReqJson, err := json.Marshal(invalidTypeReq)
 	require.NoError(t, err)
 
+	// Setup mock game server client
+	mockGameClient := new(gameserver.MockClient)
+	mockGameClient.On(gameserver.IsRunningMethod).Return("", false)
+	mockGameClient.On(gameserver.RunMethod, goodReqGame).Return(nil)
+
 	mockErr := errors.New("mock error")
 	tests := []struct {
 		name       string
@@ -123,6 +139,12 @@ func Test_BotServer_CheckMessageQueue(t *testing.T) {
 		rspEditErr error
 		queuedMsg  *awssqs.Message
 	}{
+		{
+			name: "Happy path",
+			queuedMsg: &awssqs.Message{
+				Body: aws.String(string(goodReqJson)),
+			},
+		},
 		{
 			name:       "Sad path - SQS error recieving",
 			expErr:     mockErr.Error(),
@@ -141,7 +163,7 @@ func Test_BotServer_CheckMessageQueue(t *testing.T) {
 			},
 		},
 		{
-			name:   "Sad path - Invalid interaction type",
+			name:   "Sad path - Request handler error",
 			expErr: "unsupported interaction type",
 			queuedMsg: &awssqs.Message{
 				Body: aws.String(string(invalidTypeReqJson)),
@@ -159,7 +181,8 @@ func Test_BotServer_CheckMessageQueue(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b := BotServer{
-				sqsUrl: "sqsUrl",
+				sqsUrl:     "sqsUrl",
+				gameClient: mockGameClient,
 			}
 
 			// Setup mock SQS client
@@ -172,10 +195,217 @@ func Test_BotServer_CheckMessageQueue(t *testing.T) {
 			mockSession.On(discord.SessionInteractionResponseEditMethod, mock.Anything, mock.Anything).Return(nil, tt.rspEditErr)
 			b.discordSession = mockSession
 
-			err := b.Run()
+			err := b.checkMessageQueue()
 
 			if tt.expErr == "" {
 				require.NoError(t, err)
+				mockSqsClient.AssertCalled(t, sqs.ReceiveMethod, b.sqsUrl)
+				mockSession.AssertCalled(t, discord.SessionInteractionResponseEditMethod, mock.Anything, mock.Anything)
+			} else {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expErr)
+			}
+		})
+	}
+}
+
+func Test_BotServer_RequestHandler(t *testing.T) {
+	gameName := "gameName"
+	mockErr := errors.New("mock error")
+	tests := []struct {
+		name        string
+		req         *discordgo.Interaction
+		expContent  string
+		expErr      string
+		isRunning   bool
+		runningGame string
+		runErr      error
+		stopErr     error
+	}{
+		{
+			name: "Happy path - Start command",
+			req: &discordgo.Interaction{
+				Type: discordgo.InteractionApplicationCommand,
+				Data: discordgo.ApplicationCommandInteractionData{
+					Name: command.StartCommand,
+					Options: []*discordgo.ApplicationCommandInteractionDataOption{
+						{
+							Name:  command.GameOption,
+							Type:  discordgo.ApplicationCommandOptionString,
+							Value: gameName,
+						},
+					},
+				},
+			},
+			expContent: "server has started",
+			isRunning:  false,
+		},
+		{
+			name: "Happy path - Start command with game currently running",
+			req: &discordgo.Interaction{
+				Type: discordgo.InteractionApplicationCommand,
+				Data: discordgo.ApplicationCommandInteractionData{
+					Name: command.StartCommand,
+					Options: []*discordgo.ApplicationCommandInteractionDataOption{
+						{
+							Name:  command.GameOption,
+							Type:  discordgo.ApplicationCommandOptionString,
+							Value: gameName,
+						},
+					},
+				},
+			},
+			expContent:  "is already running",
+			isRunning:   true,
+			runningGame: "otherGame",
+		},
+		{
+			name: "Happy path - Stop command",
+			req: &discordgo.Interaction{
+				Type: discordgo.InteractionApplicationCommand,
+				Data: discordgo.ApplicationCommandInteractionData{
+					Name: command.StopCommand,
+					Options: []*discordgo.ApplicationCommandInteractionDataOption{
+						{
+							Name:  command.GameOption,
+							Type:  discordgo.ApplicationCommandOptionString,
+							Value: gameName,
+						},
+					},
+				},
+			},
+			expContent:  "server has shutdown",
+			isRunning:   true,
+			runningGame: gameName,
+		},
+		{
+			name: "Happy path - Stop command with different game running",
+			req: &discordgo.Interaction{
+				Type: discordgo.InteractionApplicationCommand,
+				Data: discordgo.ApplicationCommandInteractionData{
+					Name: command.StopCommand,
+					Options: []*discordgo.ApplicationCommandInteractionDataOption{
+						{
+							Name:  command.GameOption,
+							Type:  discordgo.ApplicationCommandOptionString,
+							Value: gameName,
+						},
+					},
+				},
+			},
+			expContent:  "it is not currently running",
+			isRunning:   true,
+			runningGame: "otherGame",
+		},
+		{
+			name: "Happy path - Stop command with no game running",
+			req: &discordgo.Interaction{
+				Type: discordgo.InteractionApplicationCommand,
+				Data: discordgo.ApplicationCommandInteractionData{
+					Name: command.StopCommand,
+					Options: []*discordgo.ApplicationCommandInteractionDataOption{
+						{
+							Name:  command.GameOption,
+							Type:  discordgo.ApplicationCommandOptionString,
+							Value: gameName,
+						},
+					},
+				},
+			},
+			expContent: "it is not currently running",
+			isRunning:  false,
+		},
+		{
+			name: "Sad path - Bad interaction type",
+			req: &discordgo.Interaction{
+				Type: discordgo.InteractionPing,
+			},
+			expErr: "unsupported interaction type",
+		},
+		{
+			name: "Sad path - Missing game choice",
+			req: &discordgo.Interaction{
+				Type: discordgo.InteractionApplicationCommand,
+				Data: discordgo.ApplicationCommandInteractionData{
+					Name: command.StartCommand,
+				},
+			},
+			expErr: "command missing game choice",
+		},
+		{
+			name: "Sad path - Game server run error",
+			req: &discordgo.Interaction{
+				Type: discordgo.InteractionApplicationCommand,
+				Data: discordgo.ApplicationCommandInteractionData{
+					Name: command.StartCommand,
+					Options: []*discordgo.ApplicationCommandInteractionDataOption{
+						{
+							Name:  command.GameOption,
+							Type:  discordgo.ApplicationCommandOptionString,
+							Value: gameName,
+						},
+					},
+				},
+			},
+			expErr: mockErr.Error(),
+			runErr: mockErr,
+		},
+		{
+			name: "Sad path - Game server stop error",
+			req: &discordgo.Interaction{
+				Type: discordgo.InteractionApplicationCommand,
+				Data: discordgo.ApplicationCommandInteractionData{
+					Name: command.StopCommand,
+					Options: []*discordgo.ApplicationCommandInteractionDataOption{
+						{
+							Name:  command.GameOption,
+							Type:  discordgo.ApplicationCommandOptionString,
+							Value: gameName,
+						},
+					},
+				},
+			},
+			expErr:      mockErr.Error(),
+			isRunning:   true,
+			runningGame: gameName,
+			stopErr:     mockErr,
+		},
+		{
+			name: "Sad path - Unknown command",
+			req: &discordgo.Interaction{
+				Type: discordgo.InteractionApplicationCommand,
+				Data: discordgo.ApplicationCommandInteractionData{
+					Name: "badCommand",
+					Options: []*discordgo.ApplicationCommandInteractionDataOption{
+						{
+							Name:  command.GameOption,
+							Type:  discordgo.ApplicationCommandOptionString,
+							Value: gameName,
+						},
+					},
+				},
+			},
+			expErr: "unsupported command",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup mock game server client
+			mockGameClient := new(gameserver.MockClient)
+			mockGameClient.On(gameserver.IsRunningMethod).Return(tt.runningGame, tt.isRunning)
+			mockGameClient.On(gameserver.RunMethod, gameName).Return(tt.runErr)
+			mockGameClient.On(gameserver.StopMethod).Return(tt.stopErr)
+
+			b := &BotServer{
+				gameClient: mockGameClient,
+			}
+
+			rsp, err := b.reqHandler(tt.req)
+
+			if tt.expErr == "" {
+				require.NoError(t, err)
+				require.NotNil(t, rsp)
+				assert.Contains(t, rsp.Data.Content, tt.expContent)
 			} else {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expErr)

@@ -10,9 +10,10 @@ const (
 	MockServerShutdownResponse = "Got shutdown command"
 	MockServerShutdownMessage  = "Closing mock server"
 
-	LoadMethod = "Load"
-	RunMethod  = "Run"
-	StopMethod = "Stop"
+	LoadMethod      = "Load"
+	RunMethod       = "Run"
+	IsRunningMethod = "IsRunning"
+	StopMethod      = "Stop"
 )
 
 // Ensure MockClient implements ClientIFace
@@ -25,6 +26,11 @@ type MockClient struct {
 func (m *MockClient) Run(game string) error {
 	args := m.Called(game)
 	return args.Error(0)
+}
+
+func (m *MockClient) IsRunning() (string, bool) {
+	args := m.Called()
+	return args.String(0), args.Bool(1)
 }
 
 func (m *MockClient) Stop() error {

@@ -11,6 +11,8 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
+	"game-server/internal/discord/command"
+	"game-server/internal/gameserver"
 	"game-server/pkg/aws/sqs"
 	"game-server/pkg/discord"
 	customError "game-server/pkg/errors"
@@ -33,6 +35,8 @@ type BotServer struct {
 	token     string
 	sqsUrl    string
 
+	gameClient gameserver.ClientIFace
+
 	discordSession discord.SessionIFace
 	channelId      string
 
@@ -40,9 +44,10 @@ type BotServer struct {
 	sqsClient sqs.ClientIFace
 }
 
-func New() *BotServer {
+func New(gameClient gameserver.ClientIFace) *BotServer {
 	botServer := &BotServer{
-		sqsClient: sqs.New(),
+		gameClient: gameClient,
+		sqsClient:  sqs.New(),
 	}
 
 	// Configure server multiplexer
@@ -164,22 +169,71 @@ func (b *BotServer) eventHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (b *BotServer) reqHandler(req *discordgo.Interaction) (*discordgo.InteractionResponse, error) {
-	// Validate interaction
+	// Validate interaction and get command data
 	if req.Type != discordgo.InteractionApplicationCommand {
 		return nil, errors.New("unsupported interaction type")
 	}
-
-	// TODO: forward command to game server client
 	reqData := req.ApplicationCommandData()
-	cmd := reqData.Name
-	rsp := &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: fmt.Sprintf("Recieved command: [%s]", cmd),
-		},
+	reqGame, err := command.GetGameChoice(reqData)
+	if err != nil {
+		return nil, err
 	}
 
-	return rsp, nil
+	// Handle command
+	switch reqData.Name {
+	case command.StartCommand:
+		return b.startHandler(reqGame)
+	case command.StopCommand:
+		return b.stopHandler(reqGame)
+	}
+	return nil, fmt.Errorf("unsupported command: [%s]", reqData.Name)
+}
+
+func (b *BotServer) startHandler(startGame string) (*discordgo.InteractionResponse, error) {
+	// Ensure a game is not already running
+	if runningGame, isRunning := b.gameClient.IsRunning(); isRunning {
+		return &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: fmt.Sprintf("Cannot start %s server because %s is already running", startGame, runningGame),
+			},
+		}, nil
+	}
+
+	if err := b.gameClient.Run(startGame); err != nil {
+		return nil, err
+	}
+
+	return &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: fmt.Sprintf("%s server has started", startGame),
+		},
+	}, nil
+}
+
+func (b *BotServer) stopHandler(stopGame string) (*discordgo.InteractionResponse, error) {
+	// Ensure requested game is currently running
+	runningGame, isRunning := b.gameClient.IsRunning()
+	if !isRunning || runningGame != stopGame {
+		return &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: fmt.Sprintf("Cannot stop %s server because it is not currently running", stopGame),
+			},
+		}, nil
+	}
+
+	if err := b.gameClient.Stop(); err != nil {
+		return nil, err
+	}
+
+	return &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: fmt.Sprintf("%s server has shutdown", stopGame),
+		},
+	}, nil
 }
 
 func parseAndVerifyRequest(r *http.Request, publicKey crypto.PublicKey) (req *discordgo.Interaction, verified bool, err error) {

@@ -24,6 +24,7 @@ var _ ClientIFace = (*Client)(nil)
 
 type ClientIFace interface {
 	Run(game string) error
+	IsRunning() (gameName string, isRunning bool)
 	Stop() error
 }
 
@@ -63,6 +64,13 @@ func (c *Client) Run(game string) error {
 	return nil
 }
 
+func (c *Client) IsRunning() (gameName string, isRunning bool) {
+	if c.running != nil {
+		return c.running.name, true
+	}
+	return "", false
+}
+
 func (c *Client) Stop() error {
 	// Check that a server is running
 	if c.running == nil {
@@ -80,6 +88,7 @@ func (c *Client) Stop() error {
 }
 
 type server struct {
+	name   string
 	run    *exec.Cmd
 	stop   string
 	msg    string
@@ -90,6 +99,7 @@ type server struct {
 
 func newGameServer(cfg *config.GameConfig) (*server, error) {
 	s := &server{
+		name: cfg.Name,
 		run:  exec.Command(cfg.Run.Command, cfg.Run.Args...),
 		stop: cfg.Stop,
 		msg:  cfg.Message,
