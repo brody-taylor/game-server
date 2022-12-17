@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"os"
 	"testing"
@@ -16,6 +15,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 
 	"game-server/pkg/aws/instance"
 	"game-server/pkg/aws/sqs"
@@ -48,7 +48,9 @@ func Test_Handle_Ping(t *testing.T) {
 	os.Setenv(EnvSqsUrl, "sqsurl")
 	defer os.Unsetenv(EnvSqsUrl)
 
-	h := Handler{logger: log.Default()}
+	testLogger, err := zap.NewDevelopment()
+	require.NoError(t, err)
+	h := Handler{logger: testLogger}
 
 	tests := []struct {
 		name          string
@@ -233,8 +235,10 @@ func Test_Handle_Aws(t *testing.T) {
 			mockSqsClient.On(sqs.ConnectWithSessionMethod, awsSession).Return()
 			mockSqsClient.On(sqs.SendMethod, sqsUrl, event.Body).Return(tt.sqsSendErr)
 
+			testLogger, err := zap.NewDevelopment()
+			require.NoError(t, err)
 			h := Handler{
-				logger:         log.Default(),
+				logger:         testLogger,
 				instanceClient: mockInstanceClient,
 				sqsClient:      mockSqsClient,
 			}

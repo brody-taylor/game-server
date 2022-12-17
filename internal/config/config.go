@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"go.uber.org/zap"
 )
 
 const (
@@ -12,6 +14,7 @@ const (
 )
 
 type Config struct {
+	Logger *zap.Logger
 	games map[string]*GameConfig
 }
 
@@ -28,7 +31,14 @@ type GameConfig struct {
 }
 
 func New() *Config {
-	return &Config{}
+	return &Config{
+		Logger: NewLogger(),
+	}
+}
+
+func NewLogger() *zap.Logger {
+	logger, _ := zap.NewProduction()
+	return logger
 }
 
 func (c *Config) Load() error {

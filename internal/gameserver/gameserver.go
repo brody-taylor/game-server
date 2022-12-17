@@ -8,9 +8,13 @@ import (
 	"time"
 
 	"game-server/internal/config"
+
+	"go.uber.org/zap"
 )
 
 const (
+	loggerName = "game-client"
+
 	ServerShutdownWarning = "Server shutting down in %s"
 )
 
@@ -40,9 +44,10 @@ func New(cfg *config.Config) *Client {
 }
 
 func (c *Client) Run(game string) error {
-	gameCfg, ok := c.cfg.GetGameConfig(game)
-	if !ok {
-		return fmt.Errorf("no configuration for game: [%s]", game)
+	// Get game server
+	s, err := newGameServer(c.cfg, game)
+	if err != nil {
+		return err
 	}
 
 	// Stop currently running game
@@ -50,11 +55,6 @@ func (c *Client) Run(game string) error {
 		if err := c.Stop(); err != nil {
 			return fmt.Errorf("could not stop current game server: %w", err)
 		}
-	}
-
-	s, err := newGameServer(gameCfg)
-	if err != nil {
-		return err
 	}
 
 	if err := s.run.Start(); err != nil {
@@ -89,6 +89,7 @@ func (c *Client) Stop() error {
 
 type server struct {
 	name   string
+	logger *zap.Logger
 	run    *exec.Cmd
 	stop   string
 	msg    string
@@ -97,16 +98,22 @@ type server struct {
 	outErr io.Reader
 }
 
-func newGameServer(cfg *config.GameConfig) (*server, error) {
+func newGameServer(cfg *config.Config, game string) (*server, error) {
+	gameCfg, ok := cfg.GetGameConfig(game)
+	if !ok {
+		return nil, fmt.Errorf("no configuration for game: [%s]", game)
+	}
+
 	s := &server{
-		name: cfg.Name,
-		run:  exec.Command(cfg.Run.Command, cfg.Run.Args...),
-		stop: cfg.Stop,
-		msg:  cfg.Message,
+		name: gameCfg.Name,
+		logger: cfg.Logger.Named(loggerName).With(zap.String("game", gameCfg.Name)),
+		run:  exec.Command(gameCfg.Run.Command, gameCfg.Run.Args...),
+		stop: gameCfg.Stop,
+		msg:  gameCfg.Message,
 	}
 
 	// Specify working directory
-	if dir := cfg.WorkingDir; dir != "" {
+	if dir := gameCfg.WorkingDir; dir != "" {
 		// Convert path to absolute if relative
 		if !filepath.IsAbs(dir) {
 			var err error
@@ -155,10 +162,12 @@ func (s *server) stopServer() error {
 	select {
 	// Await graceful shutdown
 	case err := <-wait:
+		s.logger.Info("game server shutdown gracefully")
 		return err
 
 	// Force shutdown on timeout
 	case <-time.After(ServerShutdownTimeout):
+		s.logger.Error("could not shutdown game server gracefully, forcing shutdown")
 		return s.run.Process.Kill()
 	}
 }

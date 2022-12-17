@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"game-server/internal/config"
 	"game-server/internal/discord/command"
 	"game-server/internal/gameserver"
 	"game-server/pkg/aws/sqs"
@@ -22,7 +23,10 @@ import (
 )
 
 func Test_New(t *testing.T) {
-	s := New(new(gameserver.MockClient))
+	testCfg, err := config.NewTestConfig()
+	require.NoError(t, err)
+
+	s := New(testCfg, new(gameserver.MockClient))
 
 	require.NotNil(t, s)
 	assert.NotNil(t, s.sqsClient)

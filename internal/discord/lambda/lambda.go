@@ -4,17 +4,20 @@ import (
 	"bytes"
 	crypto "crypto/ed25519"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/bwmarrin/discordgo"
+	"go.uber.org/zap"
 
+	"game-server/internal/config"
 	"game-server/internal/discord/bot"
 	"game-server/pkg/aws/instance"
 	"game-server/pkg/aws/sqs"
@@ -46,7 +49,7 @@ var (
 )
 
 type Handler struct {
-	logger *log.Logger
+	logger *zap.Logger
 
 	// Env variables
 	publicKey  crypto.PublicKey
@@ -66,7 +69,7 @@ func New() *Handler {
 	httpClient.Timeout = 3 * time.Second
 
 	return &Handler{
-		logger:         log.Default(),
+		logger:         config.NewLogger(),
 		httpClient:     httpClient,
 		instanceClient: instance.New(),
 		sqsClient:      sqs.New(),
@@ -75,7 +78,7 @@ func New() *Handler {
 
 func (h *Handler) Handle(event events.APIGatewayV2HTTPRequest) events.APIGatewayV2HTTPResponse {
 	if err := h.loadEnv(); err != nil {
-		h.logger.Print(err)
+		h.logger.Error("failed to load environment", zap.Error(err))
 		return internalErrorResponse
 	}
 
@@ -115,14 +118,14 @@ func (h *Handler) handle(event events.APIGatewayV2HTTPRequest) events.APIGateway
 
 	// Connect to AWS instance
 	if err := h.instanceClient.Connect(); err != nil {
-		h.logger.Print(err)
+		h.logger.Error("could not connect to AWS", zap.Error(err))
 		return internalErrorResponse
 	}
 
 	// Get instance state
 	state, err := h.instanceClient.GetInstanceState(h.instanceId)
 	if err != nil {
-		h.logger.Print(err)
+		h.logger.Error("failed to get instance state", zap.Error(err))
 		return internalErrorResponse
 	}
 
@@ -149,14 +152,14 @@ func (h *Handler) handle(event events.APIGatewayV2HTTPRequest) events.APIGateway
 	default:
 		// Attempt to start
 		if err := h.instanceClient.StartInstance(h.instanceId); err != nil {
-			h.logger.Print(err)
+			h.logger.Error("failed to start instance", zap.Error(err))
 			return internalErrorResponse
 		}
 
 		// Forward request to deferred message queue
 		h.sqsClient.ConnectWithSession(h.instanceClient.GetSession())
 		if err := h.sqsClient.Send(h.sqsUrl, event.Body); err != nil {
-			h.logger.Print(err)
+			h.logger.Error("failed to send request to deferred message queue", zap.Error(err))
 			return internalErrorResponse
 		}
 
@@ -194,7 +197,7 @@ func (h *Handler) forwardToInstance(reqBody []byte, headers map[string]string) e
 	// Get endpoint
 	instanceAddress, err := h.instanceClient.GetInstanceAddress(h.instanceId)
 	if err != nil {
-		h.logger.Print(err)
+		h.logger.Error("failed to get instance address", zap.Error(err))
 		return internalErrorResponse
 	}
 	endpoint := fmt.Sprintf("http://%s%s", instanceAddress, bot.BotEndpoint)
@@ -202,7 +205,7 @@ func (h *Handler) forwardToInstance(reqBody []byte, headers map[string]string) e
 	// Build HTTP request
 	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(reqBody))
 	if err != nil {
-		h.logger.Print(err)
+		h.logger.Error("failed to build HTTP request", zap.Error(err))
 		return internalErrorResponse
 	}
 	req.Header.Set(discord.SignatureHeader, headers[discord.SignatureHeader])
@@ -211,14 +214,20 @@ func (h *Handler) forwardToInstance(reqBody []byte, headers map[string]string) e
 	// Make HTTP call
 	rsp, err := h.httpClient.Do(req)
 	if err != nil {
-		h.logger.Print(err)
+		urlErr := &url.Error{}
+		if errors.As(err, &urlErr) && urlErr.Timeout() {
+			h.logger.Error("HTTP call timed out", zap.Error(err))
+		} else {
+			h.logger.Error("HTTP call failed", zap.Error(err))
+		}
 		return internalErrorResponse
 	}
+	defer rsp.Body.Close()
 
 	// Convert response body
 	rspBody := new(strings.Builder)
 	if _, err := io.Copy(rspBody, rsp.Body); err != nil {
-		h.logger.Print(err)
+		h.logger.Error("failed to convert HTTP response", zap.Error(err))
 		return internalErrorResponse
 	}
 

@@ -10,7 +10,9 @@ import (
 	"os"
 
 	"github.com/bwmarrin/discordgo"
+	"go.uber.org/zap"
 
+	"game-server/internal/config"
 	"game-server/internal/discord/command"
 	"game-server/internal/gameserver"
 	"game-server/pkg/aws/sqs"
@@ -23,12 +25,15 @@ const (
 	EnvBotToken  = "DISCORD_BOT_TOKEN"
 	EnvSqsUrl    = "MESSAGE_QUEUE_URL"
 
+	loggerName = "discord-bot"
+
 	port        = "8080"
 	BotEndpoint = "/discord"
 )
 
 type BotServer struct {
-	mux http.Handler
+	mux    http.Handler
+	logger *zap.Logger
 
 	// Env variables
 	publicKey crypto.PublicKey
@@ -44,8 +49,9 @@ type BotServer struct {
 	sqsClient sqs.ClientIFace
 }
 
-func New(gameClient gameserver.ClientIFace) *BotServer {
+func New(cfg *config.Config, gameClient gameserver.ClientIFace) *BotServer {
 	botServer := &BotServer{
+		logger:     cfg.Logger.Named(loggerName),
 		gameClient: gameClient,
 		sqsClient:  sqs.New(),
 	}
@@ -151,9 +157,11 @@ func (b *BotServer) eventHandler(w http.ResponseWriter, r *http.Request) {
 	// Parse request and verify signature
 	req, verified, err := parseAndVerifyRequest(r, b.publicKey)
 	if err != nil {
+		b.logger.Error("recieved bad request", zap.Error(err))
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	} else if !verified {
+		b.logger.Error("recieved unauthorized request", zap.Error(err))
 		http.Error(w, "Invalid request signature", http.StatusUnauthorized)
 		return
 	}
@@ -161,7 +169,9 @@ func (b *BotServer) eventHandler(w http.ResponseWriter, r *http.Request) {
 	// Forward to request handler
 	rsp, err := b.reqHandler(req)
 	if err != nil {
+		b.logger.Error("failed to handle request", zap.Error(err))
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	// Write response

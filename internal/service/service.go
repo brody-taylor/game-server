@@ -1,7 +1,7 @@
 package service
 
 import (
-	"log"
+	"go.uber.org/zap"
 
 	"game-server/internal/config"
 	discordbot "game-server/internal/discord/bot"
@@ -9,8 +9,7 @@ import (
 )
 
 type Service struct {
-	cfg    *config.Config
-	logger *log.Logger
+	cfg *config.Config
 
 	gameClient gameserver.ClientIFace
 	botServer  *discordbot.BotServer
@@ -21,27 +20,26 @@ func New() *Service {
 	gameClient := gameserver.New(cfg)
 
 	return &Service{
-		cfg:    cfg,
-		logger: log.Default(),
+		cfg: cfg,
 
 		gameClient: gameClient,
-		botServer:  discordbot.New(gameClient),
+		botServer:  discordbot.New(cfg, gameClient),
 	}
 }
 
 func (s *Service) Run() {
 	// Load game config
 	if err := s.cfg.Load(); err != nil {
-		panic(err)
+		s.cfg.Logger.Panic("Failed to load config", zap.Error(err))
 	}
 
 	// Start discord bot
 	// TODO: run in separate Goroutine
 	if err := s.botServer.Connect(); err != nil {
-		s.logger.Panic(err)
+		s.cfg.Logger.Panic("Discord bot could not connect to required services", zap.Error(err))
 	}
 	if err := s.botServer.Run(); err != nil {
-		s.logger.Panic(err)
+		s.cfg.Logger.Panic("Failed to run Discord bot", zap.Error(err))
 	}
-	s.logger.Print("Discord bot closed")
+	s.cfg.Logger.Info("Discord bot closed")
 }
