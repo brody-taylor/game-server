@@ -9,6 +9,7 @@ const (
 	SessionApplicationCommandCreateMethod = "ApplicationCommandCreate"
 	SessionApplicationCommandsMethod      = "ApplicationCommands"
 	SessionApplicationCommandDeleteMethod = "ApplicationCommandDelete"
+	SessionChannelMessageSendMethod       = "ChannelMessageSend"
 	SessionInteractionRespondMethod       = "InteractionRespond"
 	SessionInteractionResponseEditMethod  = "InteractionResponseEdit"
 )
@@ -38,6 +39,14 @@ func (m *MockDiscordSession) ApplicationCommandDelete(appID string, guildID stri
 	return args.Error(0)
 }
 
+func (m *MockDiscordSession) ChannelMessageSend(channelID string, content string) (*discordgo.Message, error) {
+	args := m.Called(channelID, content)
+	if rspMsg := args.Get(0); rspMsg != nil {
+		return rspMsg.(*discordgo.Message), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
 func (m *MockDiscordSession) InteractionRespond(interaction *discordgo.Interaction, resp *discordgo.InteractionResponse) error {
 	args := m.Called(interaction, resp)
 	return args.Error(0)
@@ -45,8 +54,8 @@ func (m *MockDiscordSession) InteractionRespond(interaction *discordgo.Interacti
 
 func (m *MockDiscordSession) InteractionResponseEdit(interaction *discordgo.Interaction, newresp *discordgo.WebhookEdit) (*discordgo.Message, error) {
 	args := m.Called(interaction, newresp)
-	if rspCmd := args.Get(0); rspCmd != nil {
-		return rspCmd.(*discordgo.Message), args.Error(1)
+	if rspMsg := args.Get(0); rspMsg != nil {
+		return rspMsg.(*discordgo.Message), args.Error(1)
 	}
 	return nil, args.Error(1)
 }

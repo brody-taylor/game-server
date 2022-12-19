@@ -5,8 +5,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	awssqs "github.com/aws/aws-sdk-go/service/sqs"
@@ -214,13 +216,18 @@ func Test_BotServer_CheckMessageQueue(t *testing.T) {
 }
 
 func Test_BotServer_RequestHandler(t *testing.T) {
+	testCfg, err := config.NewTestConfig()
+	require.NoError(t, err)
+
 	gameName := "gameName"
+	chanId := "channelId"
 	mockErr := errors.New("mock error")
 	tests := []struct {
 		name        string
 		req         *discordgo.Interaction
 		expContent  string
 		expErr      string
+		expChanMsg  string
 		isRunning   bool
 		runningGame string
 		runErr      error
@@ -241,7 +248,7 @@ func Test_BotServer_RequestHandler(t *testing.T) {
 					},
 				},
 			},
-			expContent: "server has started",
+			expContent: fmt.Sprintf("Starting %s game server", gameName),
 			isRunning:  false,
 		},
 		{
@@ -278,7 +285,7 @@ func Test_BotServer_RequestHandler(t *testing.T) {
 					},
 				},
 			},
-			expContent:  "server has shutdown",
+			expContent:  "server is shutting down",
 			isRunning:   true,
 			runningGame: gameName,
 		},
@@ -351,8 +358,8 @@ func Test_BotServer_RequestHandler(t *testing.T) {
 					},
 				},
 			},
-			expErr: mockErr.Error(),
-			runErr: mockErr,
+			expChanMsg: fmt.Sprintf("Could not start %s server", gameName),
+			runErr:     mockErr,
 		},
 		{
 			name: "Sad path - Game server stop error",
@@ -369,7 +376,7 @@ func Test_BotServer_RequestHandler(t *testing.T) {
 					},
 				},
 			},
-			expErr:      mockErr.Error(),
+			expChanMsg:  fmt.Sprintf("Could not stop %s server", gameName),
 			isRunning:   true,
 			runningGame: gameName,
 			stopErr:     mockErr,
@@ -400,8 +407,20 @@ func Test_BotServer_RequestHandler(t *testing.T) {
 			mockGameClient.On(gameserver.RunMethod, gameName).Return(tt.runErr)
 			mockGameClient.On(gameserver.StopMethod).Return(tt.stopErr)
 
+			// Setup mock discord session
+			msgCall := make(chan string)
+			mockSession := new(discord.MockDiscordSession)
+			chanMsgCall := mockSession.On(discord.SessionChannelMessageSendMethod, chanId, tt.expChanMsg)
+			chanMsgCall.Run(func(args mock.Arguments) {
+				msgCall <- args.String(1)
+			})
+			chanMsgCall.Return(nil, nil)
+
 			b := &BotServer{
-				gameClient: mockGameClient,
+				logger:         testCfg.Logger,
+				channelId:      chanId,
+				gameClient:     mockGameClient,
+				discordSession: mockSession,
 			}
 
 			rsp, err := b.reqHandler(tt.req)
@@ -413,6 +432,16 @@ func Test_BotServer_RequestHandler(t *testing.T) {
 			} else {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expErr)
+			}
+
+			// Check for expected channel message
+			if tt.expChanMsg != "" {
+				select {
+				case msg := <-msgCall:
+					assert.Equal(t, tt.expChanMsg, msg)
+				case <-time.After(time.Second):
+					assert.Fail(t, "Expected channel message was not recieved")
+				}
 			}
 		})
 	}

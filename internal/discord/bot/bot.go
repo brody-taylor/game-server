@@ -210,14 +210,19 @@ func (b *BotServer) startHandler(startGame string) (*discordgo.InteractionRespon
 		}, nil
 	}
 
-	if err := b.gameClient.Run(startGame); err != nil {
-		return nil, err
-	}
+	// Start server
+	go func (game string)  {
+		if err := b.gameClient.Run(game); err != nil {
+			b.logger.Error("failed to start game server", zap.Error(err), zap.String("game", game))
+			msg := fmt.Sprintf("Could not start %s server", game)
+			b.messageChannel(msg)
+		}
+	}(startGame)
 
 	return &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: fmt.Sprintf("%s server has started", startGame),
+			Content: fmt.Sprintf("Starting %s game server", startGame),
 		},
 	}, nil
 }
@@ -234,16 +239,29 @@ func (b *BotServer) stopHandler(stopGame string) (*discordgo.InteractionResponse
 		}, nil
 	}
 
-	if err := b.gameClient.Stop(); err != nil {
-		return nil, err
-	}
+	// Stop server
+	go func (game string)  {
+		if err := b.gameClient.Stop(); err != nil {
+			b.logger.Error("failed to stop game server", zap.Error(err), zap.String("game", game))
+			msg := fmt.Sprintf("Could not stop %s server", game)
+			b.messageChannel(msg)
+		}
+	}(stopGame)
 
 	return &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: fmt.Sprintf("%s server has shutdown", stopGame),
+			Content: fmt.Sprintf("%s server is shutting down", stopGame),
 		},
 	}, nil
+}
+
+func (b *BotServer) messageChannel(msg string) bool {
+	if _, err := b.discordSession.ChannelMessageSend(b.channelId, msg); err != nil {
+		b.logger.Error("could not send channel message", zap.Error(err), zap.String("channelMsg", msg))
+		return false
+	}
+	return true
 }
 
 func parseAndVerifyRequest(r *http.Request, publicKey crypto.PublicKey) (req *discordgo.Interaction, verified bool, err error) {

@@ -13,6 +13,9 @@ type SessionIFace interface {
 	ApplicationCommands(appID string, guildID string) ([]*discordgo.ApplicationCommand, error)
 	ApplicationCommandDelete(appID string, guildID string, cmdID string) error
 
+	// Channel Messaging
+	ChannelMessageSend(channelID string, content string) (*discordgo.Message, error)
+
 	// Interactions
 	InteractionRespond(interaction *discordgo.Interaction, resp *discordgo.InteractionResponse) error
 	InteractionResponseEdit(interaction *discordgo.Interaction, newresp *discordgo.WebhookEdit) (*discordgo.Message, error)
