@@ -15,7 +15,7 @@ const (
 
 type Config struct {
 	Logger *zap.Logger
-	games map[string]*GameConfig
+	games  map[string]*GameConfig
 }
 
 type GameConfig struct {
@@ -37,7 +37,9 @@ func New() *Config {
 }
 
 func NewLogger() *zap.Logger {
-	logger, _ := zap.NewProduction()
+	logCfg := zap.NewProductionConfig()
+	logCfg.DisableStacktrace = true
+	logger, _ := logCfg.Build()
 	return logger
 }
 

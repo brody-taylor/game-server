@@ -2,10 +2,10 @@ package command
 
 import (
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/bwmarrin/discordgo"
+	"go.uber.org/zap"
 
 	"game-server/internal/config"
 	"game-server/pkg/discord"
@@ -16,12 +16,14 @@ const (
 	EnvApplicationID = "APPLICATION_ID"
 	EnvBotToken      = "BOT_TOKEN"
 
+	loggerName = "cmd-register"
+
 	registerFailErrorFormat = "following commands failed to register: %s"
 	removeFailErrorFormat   = "following commands failed to remove: %s"
 )
 
 type Client struct {
-	logger *log.Logger
+	logger *zap.Logger
 	cfg    *config.Config
 
 	// Env variables
@@ -33,7 +35,7 @@ type Client struct {
 
 func New(cfg *config.Config) *Client {
 	return &Client{
-		logger: log.Default(),
+		logger: cfg.Logger.Named(loggerName),
 		cfg:    cfg,
 	}
 }
@@ -70,11 +72,12 @@ func (c *Client) Register() error {
 	}
 
 	// Register each command
+	c.logger.Info("registering commands", zap.Int("TotalCommands", len(commands)))
 	fails := make([]string, 0, len(commands))
 	for _, cmd := range commands {
 		_, err := c.discordSession.ApplicationCommandCreate(c.appId, "", cmd)
 		if err != nil {
-			c.logger.Printf("error registering [%s] command: %s\n", cmd.Name, err.Error())
+			c.logger.Error("could not register command", zap.Error(err), zap.String("cmd", cmd.Name))
 			fails = append(fails, cmd.Name)
 		}
 	}
@@ -82,6 +85,7 @@ func (c *Client) Register() error {
 		return fmt.Errorf(registerFailErrorFormat, fails)
 	}
 
+	c.logger.Info("all commands were registered successfully")
 	return nil
 }
 
@@ -93,11 +97,12 @@ func (c *Client) Clear() error {
 	}
 
 	// Delete each command
+	c.logger.Info("removing commands", zap.Int("TotalCommands", len(cmds)))
 	fails := make([]string, 0, len(cmds))
 	for _, cmd := range cmds {
 		err := c.discordSession.ApplicationCommandDelete(c.appId, "", cmd.ID)
 		if err != nil {
-			c.logger.Printf("error removing [%s] command: %s\n", cmd.Name, err.Error())
+			c.logger.Error("could not delete command", zap.Error(err), zap.String("cmd", cmd.Name))
 			fails = append(fails, cmd.Name)
 		}
 	}
@@ -105,6 +110,7 @@ func (c *Client) Clear() error {
 		return fmt.Errorf(removeFailErrorFormat, fails)
 	}
 
+	c.logger.Info("all commands were removed successfully")
 	return nil
 }
 

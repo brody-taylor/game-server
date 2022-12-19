@@ -3,8 +3,6 @@ package command
 import (
 	"errors"
 	"fmt"
-	"log"
-	"os"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
@@ -40,10 +38,8 @@ func Test_Connect(t *testing.T) {
 
 			// Set required env variables
 			if !tt.noEnv {
-				os.Setenv(EnvApplicationID, "appid")
-				defer os.Unsetenv(EnvApplicationID)
-				os.Setenv(EnvBotToken, "token")
-				defer os.Unsetenv(EnvBotToken)
+				t.Setenv(EnvApplicationID, "appid")
+				t.Setenv(EnvBotToken, "token")
 			}
 
 			err := c.Connect()
@@ -86,7 +82,7 @@ func Test_Register(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := &Client{
-				logger: log.Default(),
+				logger: config.NewTestLogger(),
 				cfg:    testCfg,
 				appId:  "appId",
 			}
@@ -119,8 +115,8 @@ func Test_Register(t *testing.T) {
 						}
 					}
 				}
-				assert.True(t, foundGameOption, "command missing game option")
-				assert.Emptyf(t, missing, "command missing game choices: %s", missing)
+				assert.True(t, foundGameOption, "Command missing game option")
+				assert.Emptyf(t, missing, "Command missing game choices: %s", missing)
 			})
 
 			err := c.Register()
@@ -166,7 +162,7 @@ func Test_Clear(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := &Client{
-				logger: log.Default(),
+				logger: config.NewTestLogger(),
 				appId:  "appId",
 			}
 

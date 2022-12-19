@@ -23,8 +23,8 @@ type MockDiscordSession struct {
 
 func (m *MockDiscordSession) ApplicationCommandCreate(appID string, guildID string, cmd *discordgo.ApplicationCommand) (*discordgo.ApplicationCommand, error) {
 	args := m.Called(appID, guildID, cmd)
-	if rspCmd := args.Get(0); rspCmd != nil {
-		return rspCmd.(*discordgo.ApplicationCommand), args.Error(1)
+	if respCmd := args.Get(0); respCmd != nil {
+		return respCmd.(*discordgo.ApplicationCommand), args.Error(1)
 	}
 	return nil, args.Error(1)
 }
@@ -41,8 +41,8 @@ func (m *MockDiscordSession) ApplicationCommandDelete(appID string, guildID stri
 
 func (m *MockDiscordSession) ChannelMessageSend(channelID string, content string) (*discordgo.Message, error) {
 	args := m.Called(channelID, content)
-	if rspMsg := args.Get(0); rspMsg != nil {
-		return rspMsg.(*discordgo.Message), args.Error(1)
+	if respMsg := args.Get(0); respMsg != nil {
+		return respMsg.(*discordgo.Message), args.Error(1)
 	}
 	return nil, args.Error(1)
 }
@@ -54,8 +54,8 @@ func (m *MockDiscordSession) InteractionRespond(interaction *discordgo.Interacti
 
 func (m *MockDiscordSession) InteractionResponseEdit(interaction *discordgo.Interaction, newresp *discordgo.WebhookEdit) (*discordgo.Message, error) {
 	args := m.Called(interaction, newresp)
-	if rspMsg := args.Get(0); rspMsg != nil {
-		return rspMsg.(*discordgo.Message), args.Error(1)
+	if respMsg := args.Get(0); respMsg != nil {
+		return respMsg.(*discordgo.Message), args.Error(1)
 	}
 	return nil, args.Error(1)
 }

@@ -105,11 +105,11 @@ func newGameServer(cfg *config.Config, game string) (*server, error) {
 	}
 
 	s := &server{
-		name: gameCfg.Name,
+		name:   gameCfg.Name,
 		logger: cfg.Logger.Named(loggerName).With(zap.String("game", gameCfg.Name)),
-		run:  exec.Command(gameCfg.Run.Command, gameCfg.Run.Args...),
-		stop: gameCfg.Stop,
-		msg:  gameCfg.Message,
+		run:    exec.Command(gameCfg.Run.Command, gameCfg.Run.Args...),
+		stop:   gameCfg.Stop,
+		msg:    gameCfg.Message,
 	}
 
 	// Specify working directory

@@ -43,7 +43,7 @@ func Test_GetGameChoice(t *testing.T) {
 		{
 			name:    "Sad path - Nil options",
 			cmdData: discordgo.ApplicationCommandInteractionData{},
-			expErr: true,
+			expErr:  true,
 		},
 		{
 			name: "Sad path - Non-string option type",

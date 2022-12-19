@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"go.uber.org/zap"
 )
 
 //go:embed testdata/gameconfig.json
@@ -19,6 +21,8 @@ const (
 
 func NewTestConfig() (*Config, error) {
 	cfg := New()
+	cfg.Logger = NewTestLogger()
+
 	if err := cfg.loadGameConfigFile(mockGameConfigFile); err != nil {
 		return nil, err
 	}
@@ -31,6 +35,10 @@ func NewTestConfig() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func NewTestLogger() *zap.Logger {
+	return zap.NewNop()
 }
 
 func getProjRoot() string {

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"os"
 	"testing"
 	"time"
 
@@ -15,8 +14,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 
+	"game-server/internal/config"
 	"game-server/pkg/aws/instance"
 	"game-server/pkg/aws/sqs"
 	"game-server/pkg/discord"
@@ -43,14 +42,12 @@ func Test_Handle_Ping(t *testing.T) {
 	pingReqString := string(pingReq)
 
 	// Set required env variables
-	os.Setenv(EnvInstanceId, "instance-id")
-	defer os.Unsetenv(EnvInstanceId)
-	os.Setenv(EnvSqsUrl, "sqsurl")
-	defer os.Unsetenv(EnvSqsUrl)
+	t.Setenv(EnvInstanceId, "instance-id")
+	t.Setenv(EnvSqsUrl, "sqsurl")
 
-	testLogger, err := zap.NewDevelopment()
-	require.NoError(t, err)
-	h := Handler{logger: testLogger}
+	h := Handler{
+		logger: config.NewTestLogger(),
+	}
 
 	tests := []struct {
 		name          string
@@ -110,8 +107,7 @@ func Test_Handle_Ping(t *testing.T) {
 
 			// Set public key env
 			if tt.pubKeyEnv != "" {
-				os.Setenv(EnvPublicKey, tt.pubKeyEnv)
-				defer os.Unsetenv(EnvPublicKey)
+				t.Setenv(EnvPublicKey, tt.pubKeyEnv)
 			}
 
 			// Setup event
@@ -124,12 +120,12 @@ func Test_Handle_Ping(t *testing.T) {
 				Body:    tt.eventBody,
 			}
 
-			rsp := h.Handle(event)
+			resp := h.Handle(event)
 
-			require.Equal(t, tt.expStatusCode, rsp.StatusCode)
+			require.Equal(t, tt.expStatusCode, resp.StatusCode)
 			if tt.expStatusCode == http.StatusOK {
 				var gotBody discordgo.InteractionResponse
-				require.NoError(t, json.Unmarshal([]byte(rsp.Body), &gotBody))
+				require.NoError(t, json.Unmarshal([]byte(resp.Body), &gotBody))
 				assert.Equal(t, tt.expBody, gotBody)
 			}
 		})
@@ -158,18 +154,16 @@ func Test_Handle_Aws(t *testing.T) {
 
 	// Set required env variables
 	instanceId := "instance-id"
-	os.Setenv(EnvInstanceId, instanceId)
-	defer os.Unsetenv(EnvInstanceId)
-	os.Setenv(EnvPublicKey, hex.EncodeToString(pubKey))
 	sqsUrl := "sqsurl"
-	os.Setenv(EnvSqsUrl, sqsUrl)
-	defer os.Unsetenv(EnvSqsUrl)
+	t.Setenv(EnvInstanceId, instanceId)
+	t.Setenv(EnvPublicKey, hex.EncodeToString(pubKey))
+	t.Setenv(EnvSqsUrl, sqsUrl)
 
 	mockErr := errors.New("mock error")
 	tests := []struct {
 		name          string
 		expStatusCode int
-		expRspType    discordgo.InteractionResponseType
+		expRespType   discordgo.InteractionResponseType
 		connectErr    error
 		getState      string
 		getStateErr   error
@@ -181,13 +175,13 @@ func Test_Handle_Aws(t *testing.T) {
 		{
 			name:          "Happy path - Deferred response after starting server",
 			expStatusCode: http.StatusOK,
-			expRspType:    discord.DeferredResponse.Type,
+			expRespType:   discord.DeferredResponse.Type,
 			getState:      instance.InstanceStoppedState,
 		},
 		{
 			name:          "Happy path - Channel message if command during startup",
 			expStatusCode: http.StatusOK,
-			expRspType:    discordgo.InteractionResponseChannelMessageWithSource,
+			expRespType:   discordgo.InteractionResponseChannelMessageWithSource,
 			getState:      instance.InstancePendingState,
 		},
 		{
@@ -235,26 +229,24 @@ func Test_Handle_Aws(t *testing.T) {
 			mockSqsClient.On(sqs.ConnectWithSessionMethod, awsSession).Return()
 			mockSqsClient.On(sqs.SendMethod, sqsUrl, event.Body).Return(tt.sqsSendErr)
 
-			testLogger, err := zap.NewDevelopment()
-			require.NoError(t, err)
 			h := Handler{
-				logger:         testLogger,
+				logger:         config.NewTestLogger(),
 				instanceClient: mockInstanceClient,
 				sqsClient:      mockSqsClient,
 			}
 
-			rsp := h.Handle(event)
+			resp := h.Handle(event)
 
 			// Check HTTP status code
-			require.Equal(t, tt.expStatusCode, rsp.StatusCode)
+			require.Equal(t, tt.expStatusCode, resp.StatusCode)
 
 			// Check interaction response
 			if tt.expStatusCode == http.StatusOK {
-				var interactionRsp discordgo.InteractionResponse
-				require.NoError(t, json.Unmarshal([]byte(rsp.Body), &interactionRsp))
-				assert.Equal(t, tt.expRspType, interactionRsp.Type)
-				if tt.expRspType == discordgo.InteractionResponseChannelMessageWithSource {
-					assert.NotEmpty(t, interactionRsp.Data.Content)
+				var interactionResp discordgo.InteractionResponse
+				require.NoError(t, json.Unmarshal([]byte(resp.Body), &interactionResp))
+				assert.Equal(t, tt.expRespType, interactionResp.Type)
+				if tt.expRespType == discordgo.InteractionResponseChannelMessageWithSource {
+					assert.NotEmpty(t, interactionResp.Data.Content)
 				}
 			}
 		})

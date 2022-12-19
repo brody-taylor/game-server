@@ -83,11 +83,13 @@ func (b *BotServer) Connect() error {
 
 func (b *BotServer) Run() error {
 	// Handle any queued messages
+	b.logger.Info("checking deferred message queue")
 	if err := b.checkMessageQueue(); err != nil {
 		return err
 	}
 
 	// Start listening for requests
+	b.logger.Info("now listening", zap.String("port", port))
 	err := http.ListenAndServe(fmt.Sprintf(":%s", port), b.mux)
 	if err != nil && errors.Is(err, http.ErrServerClosed) {
 		return nil
@@ -136,20 +138,20 @@ func (b *BotServer) checkMessageQueue() error {
 	b.channelId = req.ChannelID
 
 	// Forward to request handler
-	interactionRsp, err := b.reqHandler(req)
+	interactionResp, err := b.reqHandler(req)
 	if err != nil {
 		return err
 	}
 
 	// Update deferred response
-	updatedRsp := &discordgo.WebhookEdit{
-		Content:         &interactionRsp.Data.Content,
-		Components:      &interactionRsp.Data.Components,
-		Embeds:          &interactionRsp.Data.Embeds,
-		Files:           interactionRsp.Data.Files,
-		AllowedMentions: interactionRsp.Data.AllowedMentions,
+	updatedResp := &discordgo.WebhookEdit{
+		Content:         &interactionResp.Data.Content,
+		Components:      &interactionResp.Data.Components,
+		Embeds:          &interactionResp.Data.Embeds,
+		Files:           interactionResp.Data.Files,
+		AllowedMentions: interactionResp.Data.AllowedMentions,
 	}
-	_, err = b.discordSession.InteractionResponseEdit(req, updatedRsp)
+	_, err = b.discordSession.InteractionResponseEdit(req, updatedResp)
 	return err
 }
 
@@ -165,9 +167,10 @@ func (b *BotServer) eventHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request signature", http.StatusUnauthorized)
 		return
 	}
+	b.logger.Info("recieved request")
 
 	// Forward to request handler
-	rsp, err := b.reqHandler(req)
+	resp, err := b.reqHandler(req)
 	if err != nil {
 		b.logger.Error("failed to handle request", zap.Error(err))
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -175,7 +178,7 @@ func (b *BotServer) eventHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Write response
-	writeResponse(rsp, w)
+	writeResponse(resp, w)
 }
 
 func (b *BotServer) reqHandler(req *discordgo.Interaction) (*discordgo.InteractionResponse, error) {
@@ -202,6 +205,7 @@ func (b *BotServer) reqHandler(req *discordgo.Interaction) (*discordgo.Interacti
 func (b *BotServer) startHandler(startGame string) (*discordgo.InteractionResponse, error) {
 	// Ensure a game is not already running
 	if runningGame, isRunning := b.gameClient.IsRunning(); isRunning {
+		b.logger.Info("recieved start request while game is running", zap.String("requestGame", startGame), zap.String("runningGame", runningGame))
 		return &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
@@ -211,7 +215,7 @@ func (b *BotServer) startHandler(startGame string) (*discordgo.InteractionRespon
 	}
 
 	// Start server
-	go func (game string)  {
+	go func(game string) {
 		if err := b.gameClient.Run(game); err != nil {
 			b.logger.Error("failed to start game server", zap.Error(err), zap.String("game", game))
 			msg := fmt.Sprintf("Could not start %s server", game)
@@ -231,6 +235,7 @@ func (b *BotServer) stopHandler(stopGame string) (*discordgo.InteractionResponse
 	// Ensure requested game is currently running
 	runningGame, isRunning := b.gameClient.IsRunning()
 	if !isRunning || runningGame != stopGame {
+		b.logger.Info("recieved stop request for game that is not running", zap.String("requestGame", stopGame), zap.String("runningGame", runningGame))
 		return &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
@@ -240,7 +245,7 @@ func (b *BotServer) stopHandler(stopGame string) (*discordgo.InteractionResponse
 	}
 
 	// Stop server
-	go func (game string)  {
+	go func(game string) {
 		if err := b.gameClient.Stop(); err != nil {
 			b.logger.Error("failed to stop game server", zap.Error(err), zap.String("game", game))
 			msg := fmt.Sprintf("Could not stop %s server", game)
@@ -280,14 +285,14 @@ func parseAndVerifyRequest(r *http.Request, publicKey crypto.PublicKey) (req *di
 	return req, verified, err
 }
 
-func writeResponse(rsp *discordgo.InteractionResponse, w http.ResponseWriter) {
-	jsonRsp, err := json.Marshal(rsp)
+func writeResponse(resp *discordgo.InteractionResponse, w http.ResponseWriter) {
+	jsonResp, err := json.Marshal(resp)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	_, err = w.Write(jsonRsp)
+	_, err = w.Write(jsonResp)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}

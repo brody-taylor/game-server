@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -76,12 +75,9 @@ func Test_BotServer_Connect(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set required env variables
 			if !tt.noEnv {
-				os.Setenv(EnvPublicKey, tt.pubKey)
-				defer os.Unsetenv(EnvPublicKey)
-				os.Setenv(EnvBotToken, botToken)
-				defer os.Unsetenv(EnvBotToken)
-				os.Setenv(EnvSqsUrl, sqsUrl)
-				defer os.Unsetenv(EnvSqsUrl)
+				t.Setenv(EnvPublicKey, tt.pubKey)
+				t.Setenv(EnvBotToken, botToken)
+				t.Setenv(EnvSqsUrl, sqsUrl)
 			}
 
 			// Setup mock SQS client
@@ -139,11 +135,11 @@ func Test_BotServer_CheckMessageQueue(t *testing.T) {
 
 	mockErr := errors.New("mock error")
 	tests := []struct {
-		name       string
-		expErr     string
-		recieveErr error
-		rspEditErr error
-		queuedMsg  *awssqs.Message
+		name        string
+		expErr      string
+		recieveErr  error
+		respEditErr error
+		queuedMsg   *awssqs.Message
 	}{
 		{
 			name: "Happy path",
@@ -181,7 +177,7 @@ func Test_BotServer_CheckMessageQueue(t *testing.T) {
 			queuedMsg: &awssqs.Message{
 				Body: aws.String(string(goodReqJson)),
 			},
-			rspEditErr: mockErr,
+			respEditErr: mockErr,
 		},
 	}
 	for _, tt := range tests {
@@ -198,7 +194,7 @@ func Test_BotServer_CheckMessageQueue(t *testing.T) {
 
 			// Setup mock discord session
 			mockSession := new(discord.MockDiscordSession)
-			mockSession.On(discord.SessionInteractionResponseEditMethod, mock.Anything, mock.Anything).Return(nil, tt.rspEditErr)
+			mockSession.On(discord.SessionInteractionResponseEditMethod, mock.Anything, mock.Anything).Return(nil, tt.respEditErr)
 			b.discordSession = mockSession
 
 			err := b.checkMessageQueue()
@@ -423,12 +419,12 @@ func Test_BotServer_RequestHandler(t *testing.T) {
 				discordSession: mockSession,
 			}
 
-			rsp, err := b.reqHandler(tt.req)
+			resp, err := b.reqHandler(tt.req)
 
 			if tt.expErr == "" {
 				require.NoError(t, err)
-				require.NotNil(t, rsp)
-				assert.Contains(t, rsp.Data.Content, tt.expContent)
+				require.NotNil(t, resp)
+				assert.Contains(t, resp.Data.Content, tt.expContent)
 			} else {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expErr)

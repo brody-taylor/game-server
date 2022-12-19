@@ -29,6 +29,8 @@ const (
 	EnvPublicKey  = "PUBLIC_KEY"
 	EnvInstanceId = "INSTANCE_ID"
 	EnvSqsUrl     = "MESSAGE_QUEUE_URL"
+
+	loggerName = "discord-lambda"
 )
 
 var (
@@ -69,7 +71,7 @@ func New() *Handler {
 	httpClient.Timeout = 3 * time.Second
 
 	return &Handler{
-		logger:         config.NewLogger(),
+		logger:         config.NewLogger().Named(loggerName),
 		httpClient:     httpClient,
 		instanceClient: instance.New(),
 		sqsClient:      sqs.New(),
@@ -82,15 +84,15 @@ func (h *Handler) Handle(event events.APIGatewayV2HTTPRequest) events.APIGateway
 		return internalErrorResponse
 	}
 
-	rsp := h.handle(event)
+	resp := h.handle(event)
 
 	// Set content-type header in response
-	if rsp.Headers == nil {
-		rsp.Headers = make(map[string]string, 1)
+	if resp.Headers == nil {
+		resp.Headers = make(map[string]string, 1)
 	}
-	rsp.Headers["Content-Type"] = "application/json"
+	resp.Headers["Content-Type"] = "application/json"
 
-	return rsp
+	return resp
 }
 
 func (h *Handler) handle(event events.APIGatewayV2HTTPRequest) events.APIGatewayV2HTTPResponse {
@@ -136,13 +138,13 @@ func (h *Handler) handle(event events.APIGatewayV2HTTPRequest) events.APIGateway
 
 	// Send error message when server is already starting up
 	case instance.InstancePendingState:
-		rsp := discordgo.InteractionResponse{
+		resp := discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "Server is still starting up!",
 			},
 		}
-		body, _ := json.Marshal(rsp)
+		body, _ := json.Marshal(resp)
 		return events.APIGatewayV2HTTPResponse{
 			StatusCode: http.StatusOK,
 			Body:       string(body),
@@ -212,7 +214,7 @@ func (h *Handler) forwardToInstance(reqBody []byte, headers map[string]string) e
 	req.Header.Set(discord.TimestampHeader, headers[discord.TimestampHeader])
 
 	// Make HTTP call
-	rsp, err := h.httpClient.Do(req)
+	resp, err := h.httpClient.Do(req)
 	if err != nil {
 		urlErr := &url.Error{}
 		if errors.As(err, &urlErr) && urlErr.Timeout() {
@@ -222,17 +224,17 @@ func (h *Handler) forwardToInstance(reqBody []byte, headers map[string]string) e
 		}
 		return internalErrorResponse
 	}
-	defer rsp.Body.Close()
+	defer resp.Body.Close()
 
 	// Convert response body
-	rspBody := new(strings.Builder)
-	if _, err := io.Copy(rspBody, rsp.Body); err != nil {
+	respBody := new(strings.Builder)
+	if _, err := io.Copy(respBody, resp.Body); err != nil {
 		h.logger.Error("failed to convert HTTP response", zap.Error(err))
 		return internalErrorResponse
 	}
 
 	return events.APIGatewayV2HTTPResponse{
-		StatusCode: rsp.StatusCode,
-		Body:       rspBody.String(),
+		StatusCode: resp.StatusCode,
+		Body:       respBody.String(),
 	}
 }

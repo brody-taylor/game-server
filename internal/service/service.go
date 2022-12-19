@@ -30,16 +30,17 @@ func New() *Service {
 func (s *Service) Run() {
 	// Load game config
 	if err := s.cfg.Load(); err != nil {
-		s.cfg.Logger.Panic("Failed to load config", zap.Error(err))
+		s.cfg.Logger.Panic("failed to load config", zap.Error(err))
 	}
 
 	// Start discord bot
 	// TODO: run in separate Goroutine
+	s.cfg.Logger.Info("starting discord bot")
 	if err := s.botServer.Connect(); err != nil {
-		s.cfg.Logger.Panic("Discord bot could not connect to required services", zap.Error(err))
+		s.cfg.Logger.Panic("discord bot could not connect to required services", zap.Error(err))
 	}
 	if err := s.botServer.Run(); err != nil {
-		s.cfg.Logger.Panic("Failed to run Discord bot", zap.Error(err))
+		s.cfg.Logger.Panic("failed to run Discord bot", zap.Error(err))
 	}
-	s.cfg.Logger.Info("Discord bot closed")
+	s.cfg.Logger.Info("discord bot closed")
 }

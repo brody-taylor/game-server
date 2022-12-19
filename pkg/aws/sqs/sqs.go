@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	groupId   = "default"
+	groupId = "default"
 )
 
 // Ensure Client implements ClientIFace
@@ -55,8 +55,8 @@ func (c *Client) GetSession() *session.Session {
 
 func (c *Client) Send(queueUrl string, msg string) error {
 	req, _ := c.sqsClient.SendMessageRequest(&sqs.SendMessageInput{
-		QueueUrl:    aws.String(queueUrl),
-		MessageBody: aws.String(msg),
+		QueueUrl:       aws.String(queueUrl),
+		MessageBody:    aws.String(msg),
 		MessageGroupId: aws.String(groupId),
 	})
 	return req.Send()
@@ -66,11 +66,11 @@ func (c *Client) Receive(queueUrl string) (*sqs.Message, error) {
 	req := &sqs.ReceiveMessageInput{
 		QueueUrl: aws.String(queueUrl),
 	}
-	rsp, err := c.sqsClient.ReceiveMessage(req)
+	resp, err := c.sqsClient.ReceiveMessage(req)
 	if err != nil {
 		return nil, err
-	} else if len(rsp.Messages) > 0 {
-		return rsp.Messages[0], nil
+	} else if len(resp.Messages) > 0 {
+		return resp.Messages[0], nil
 	}
 	return nil, nil
 }
