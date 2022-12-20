@@ -26,8 +26,9 @@ type GameConfig struct {
 		Command string   `json:"command"`
 		Args    []string `json:"args"`
 	} `json:"run"`
-	Message string `json:"message"`
-	Stop    string `json:"stop"`
+	Message string  `json:"message"`
+	Stop    string  `json:"stop"`
+	Ports   []int32 `json:"ports"`
 }
 
 func New() *Config {
@@ -62,6 +63,14 @@ func (c *Config) GetGameNames() []string {
 		names = append(names, gameCfg.Name)
 	}
 	return names
+}
+
+func (c *Config) GetGamePorts() []int32 {
+	var ports []int32
+	for _, gameCfg := range c.games {
+		ports = append(ports, gameCfg.Ports...)
+	}
+	return ports
 }
 
 func (c *Config) loadGameConfig() error {
