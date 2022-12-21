@@ -32,7 +32,7 @@ func Test_New(t *testing.T) {
 	require.NotNil(t, s)
 	assert.NotNil(t, s.sqsClient)
 	assert.NotNil(t, s.gameClient)
-	assert.NotNil(t, s.mux)
+	assert.NotNil(t, s.srv)
 }
 
 func Test_BotServer_Connect(t *testing.T) {

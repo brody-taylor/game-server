@@ -61,5 +61,25 @@ func (s *Service) Run() {
 	// Await inactivity before triggering shutdown
 	<-inactive
 	s.cfg.Logger.Info("game server is inactive, initiating shutdown")
-	// TODO: graceful shutdown
+	s.gracefulShutdown()
+}
+
+func (s *Service) gracefulShutdown() {
+	// Flushes log buffer, if any
+	defer s.cfg.Logger.Sync()
+
+	// Shutdown game server if currently running
+	if _, running := s.gameClient.IsRunning(); running {
+		if err := s.gameClient.Stop(); err != nil {
+			s.cfg.Logger.Error("could not shutdown game server", zap.Error(err))
+		}
+	}
+
+	// Stop monitoring server activity
+	s.monitor.Close()
+
+	// Stop Discord bot server
+	if err := s.botServer.Stop(); err != nil {
+		s.cfg.Logger.Error("could not shutdown discord bot", zap.Error(err))
+	}
 }

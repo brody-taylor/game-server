@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"context"
 	crypto "crypto/ed25519"
 	"encoding/json"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"go.uber.org/zap"
@@ -32,7 +34,7 @@ const (
 )
 
 type BotServer struct {
-	mux    http.Handler
+	srv    *http.Server
 	logger *zap.Logger
 
 	// Env variables
@@ -59,7 +61,11 @@ func New(cfg *config.Config, gameClient gameserver.ClientIFace) *BotServer {
 	// Configure server multiplexer
 	mux := http.NewServeMux()
 	mux.HandleFunc(BotEndpoint, botServer.eventHandler)
-	botServer.mux = mux
+
+	botServer.srv = &http.Server{
+		Addr:    fmt.Sprintf(":%s", port),
+		Handler: mux,
+	}
 
 	return botServer
 }
@@ -90,11 +96,17 @@ func (b *BotServer) Run() error {
 
 	// Start listening for requests
 	b.logger.Info("now listening", zap.String("port", port))
-	err := http.ListenAndServe(fmt.Sprintf(":%s", port), b.mux)
+	err := b.srv.ListenAndServe()
 	if err != nil && errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}
 	return err
+}
+
+func (b *BotServer) Stop() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
+	defer cancel()
+	return b.srv.Shutdown(ctx)
 }
 
 func (b *BotServer) loadEnv() error {
