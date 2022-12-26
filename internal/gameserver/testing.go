@@ -1,15 +1,8 @@
 package gameserver
 
-import (
-	"github.com/stretchr/testify/mock"
-)
+import "github.com/stretchr/testify/mock"
 
 const (
-	// Mock server messages
-	MockServerStartupMessage   = "Started mock server"
-	MockServerShutdownResponse = "Got shutdown command"
-	MockServerShutdownMessage  = "Closing mock server"
-
 	LoadMethod      = "Load"
 	RunMethod       = "Run"
 	IsRunningMethod = "IsRunning"

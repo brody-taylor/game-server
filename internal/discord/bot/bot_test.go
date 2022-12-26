@@ -16,16 +16,15 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"game-server/internal/config"
 	"game-server/internal/discord/command"
 	"game-server/internal/gameserver"
+	"game-server/internal/testing/mockserver"
 	"game-server/pkg/aws/sqs"
 	"game-server/pkg/discord"
 )
 
 func Test_New(t *testing.T) {
-	testCfg, err := config.NewTestConfig()
-	require.NoError(t, err)
+	testCfg := mockserver.GetConfig(t)
 
 	s := New(testCfg, new(gameserver.MockClient))
 
@@ -212,8 +211,7 @@ func Test_BotServer_CheckMessageQueue(t *testing.T) {
 }
 
 func Test_BotServer_RequestHandler(t *testing.T) {
-	testCfg, err := config.NewTestConfig()
-	require.NoError(t, err)
+	testCfg := mockserver.GetConfig(t)
 
 	gameName := "gameName"
 	chanId := "channelId"

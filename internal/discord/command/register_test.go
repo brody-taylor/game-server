@@ -11,12 +11,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"game-server/internal/config"
+	"game-server/internal/testing/mockserver"
 	"game-server/pkg/discord"
 )
 
 func Test_Connect(t *testing.T) {
-	testCfg, err := config.NewTestConfig()
-	require.NoError(t, err)
+	testCfg := mockserver.GetConfig(t)
 
 	tests := []struct {
 		name   string
@@ -55,8 +55,7 @@ func Test_Connect(t *testing.T) {
 }
 
 func Test_Register(t *testing.T) {
-	testCfg, err := config.NewTestConfig()
-	require.NoError(t, err)
+	testCfg := mockserver.GetConfig(t)
 
 	mockErr := errors.New("mock err")
 	gameNames := testCfg.GetGameNames()

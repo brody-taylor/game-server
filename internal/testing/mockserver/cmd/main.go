@@ -8,12 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"game-server/internal/config"
-	"game-server/internal/gameserver"
+	"game-server/internal/testing/mockserver"
 )
 
 func main() {
-	fmt.Println(gameserver.MockServerStartupMessage)
+	fmt.Println(mockserver.StartupMessage)
 	ctx, end := context.WithTimeout(context.Background(), 30*time.Second)
 
 	go func() {
@@ -22,12 +21,12 @@ func main() {
 		for in.Scan() {
 			line := in.Text()
 			switch {
-			case line == config.MockGameStopCommand:
-				fmt.Println(gameserver.MockServerShutdownResponse)
+			case line == mockserver.StopCommand:
+				fmt.Println(mockserver.ShutdownResponse)
 				return
 
-			case strings.HasPrefix(line, config.MockGameMessageCommand):
-				msg := strings.TrimPrefix(line, config.MockGameMessageCommand)
+			case strings.HasPrefix(line, mockserver.MessageCommand):
+				msg := strings.TrimPrefix(line, mockserver.MessageCommand)
 				msg = strings.TrimPrefix(msg, " ")
 				fmt.Println(msg)
 
@@ -38,5 +37,5 @@ func main() {
 	}()
 
 	<-ctx.Done()
-	fmt.Println(gameserver.MockServerShutdownMessage)
+	fmt.Println(mockserver.ShutdownMessage)
 }

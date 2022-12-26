@@ -1,0 +1,14 @@
+[
+    {
+        "name": "",
+        "description": "",
+        "working_directory": "",
+        "run": {
+            "command": "",
+            "args": []
+        },
+        "message": "",
+        "stop": "",
+        "ports": []
+    }
+]

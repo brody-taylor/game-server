@@ -2,12 +2,12 @@
     {
         "name": "MockGame",
         "description": "Description for Mock Game",
-        "working_directory": "internal/gameserver/mockserver",
+        "working_directory": "",
         "run": {
             "command": "go",
             "args": [
                 "run",
-                "mockserver.go"
+                "cmd/main.go"
             ]
         },
         "message": "/message",

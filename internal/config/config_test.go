@@ -10,7 +10,7 @@ import (
 
 func Test_Load(t *testing.T) {
 	// Set game config path to mock
-	t.Setenv(config.EnvGameConfig, "testdata/gameconfig.json")
+	t.Setenv(config.EnvGameConfig, "testdata/emptyconfig.json")
 
 	cfg := config.New()
 

@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"game-server/internal/config"
+	"game-server/internal/testing/mockserver"
 )
 
 func Test_Run_and_Stop(t *testing.T) {
@@ -20,14 +20,11 @@ func Test_Run_and_Stop(t *testing.T) {
 	}(ServerShutdownDelay)
 	newDelay := 10 * time.Millisecond
 	ServerShutdownDelay = newDelay
-
-	// Get test config
-	testCfg, err := config.NewTestConfig()
-	require.NoError(t, err)
-
+	
 	// Start mock server
+	testCfg := mockserver.GetConfig(t)
 	c := New(testCfg)
-	require.NoError(t, c.Run(config.MockGameName))
+	require.NoError(t, c.Run(mockserver.GameName))
 	time.Sleep(10 * time.Millisecond)
 
 	// Record stdout from mock server
@@ -55,7 +52,7 @@ func Test_Run_and_Stop(t *testing.T) {
 	for _, line := range out {
 		if strings.Contains(line, fmt.Sprintf(ServerShutdownWarning, newDelay)) {
 			didWarningMsg = true
-		} else if strings.Contains(line, MockServerShutdownResponse) {
+		} else if strings.Contains(line, mockserver.ShutdownResponse) {
 			didGracefulShutdown = true
 		}
 	}
