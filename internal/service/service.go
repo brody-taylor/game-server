@@ -5,6 +5,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"game-server/internal/backup"
 	"game-server/internal/config"
 	discordbot "game-server/internal/discord/bot"
 	"game-server/internal/gameserver"
@@ -19,6 +20,7 @@ type Service struct {
 	gameClient gameserver.ClientIFace
 	botServer  *discordbot.BotServer
 	monitor    monitor.ClientIFace
+	backup     *backup.Client
 }
 
 func New() *Service {
@@ -31,6 +33,7 @@ func New() *Service {
 		gameClient: gameClient,
 		botServer:  discordbot.New(cfg, gameClient),
 		monitor:    monitor.New(inactivityThreshold),
+		backup:     backup.New(cfg),
 	}
 }
 
@@ -81,5 +84,10 @@ func (s *Service) gracefulShutdown() {
 	// Stop Discord bot server
 	if err := s.botServer.Stop(); err != nil {
 		s.cfg.Logger.Error("could not shutdown discord bot", zap.Error(err))
+	}
+
+	// Backup game save data
+	if err := s.backup.DoBackup(); err != nil {
+		s.cfg.Logger.Error("error encountered backing up save data", zap.Error(err))
 	}
 }
