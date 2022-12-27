@@ -26,9 +26,10 @@ type GameConfig struct {
 		Command string   `json:"command"`
 		Args    []string `json:"args"`
 	} `json:"run"`
-	Message string  `json:"message"`
-	Stop    string  `json:"stop"`
-	Ports   []int32 `json:"ports"`
+	Message   string   `json:"message"`
+	Stop      string   `json:"stop"`
+	Ports     []int32  `json:"ports"`
+	SaveFiles []string `json:"save_files"`
 }
 
 func New() *Config {

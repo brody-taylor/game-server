@@ -5,7 +5,7 @@ import (
 	"path"
 	"runtime"
 	"testing"
-	
+
 	"github.com/stretchr/testify/require"
 
 	"game-server/internal/config"
@@ -25,6 +25,12 @@ const (
 	ShutdownResponse = "Got shutdown command"
 	ShutdownMessage  = "Closing mock server"
 )
+
+var SaveFilePaths = []string{
+	"savedata/savefile1.txt",
+	"savedata/savedir/savefile2.txt",
+	"savedata/savedir/savefile3",
+}
 
 func GetConfig(t *testing.T) *config.Config {
 	cfg := config.NewTestConfig(t, configFile)

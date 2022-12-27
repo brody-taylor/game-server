@@ -12,6 +12,10 @@
         },
         "message": "/message",
         "stop": "/stop",
-        "ports": []
+        "ports": [],
+        "save_files": [
+            "savedata/savefile1.txt",
+            "savedata/savedir"
+        ]
     }
 ]
